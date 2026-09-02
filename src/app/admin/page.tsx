@@ -10,20 +10,14 @@ import {
 } from 'lucide-react';
 import { auth } from '@/lib/firebase/config';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { getApplicants, addApplicant, updateApplicant, removeApplicant, uploadResumeFile, Applicant, ApplicationStatus } from '@/lib/firebase/db';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword as secondaryCreateUser } from 'firebase/auth';
+import { 
+  getApplicants, addApplicant, updateApplicant, removeApplicant, uploadResumeFile, Applicant, ApplicationStatus,
+  getAdmins, addAdminToDB, removeAdminFromDB, AdminUser 
+} from '@/lib/firebase/db';
 
-// Types imported from firebase/db
-
-interface AdminUser {
-  id: string;
-  email: string;
-  role: string;
-  addedAt: string;
-}
-
-const INITIAL_ADMINS: AdminUser[] = [
-  { id: "ADM-01", email: "admin@vektor.com", role: "Super Admin", addedAt: "2026-01-01T00:00:00Z" }
-];
+const INITIAL_ADMINS: AdminUser[] = [];
 
 const INITIAL_MOCK_DATA: Applicant[] = [
   {
@@ -109,8 +103,9 @@ export default function AdminDashboard() {
       if (user) {
         setIsAuthenticated(true);
         try {
-          const data = await getApplicants();
-          setApplicants(data);
+          const [appsData, adminsData] = await Promise.all([getApplicants(), getAdmins()]);
+          setApplicants(appsData);
+          setAdmins(adminsData);
         } catch (error) {
           console.error("Error fetching applicants:", error);
           showToast("Error", "Could not connect to Firebase database.");
@@ -347,7 +342,8 @@ export default function AdminDashboard() {
               <Shield className="text-white w-8 h-8" />
             </div>
           </div>
-          <h1 className="text-center font-hero text-4xl text-white mb-2">VEKTOR</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo.png" alt="VEKTOR" className="h-10 w-auto object-contain mx-auto mb-4" />
           <p className="text-center text-xs text-gray-500 font-mono tracking-widest uppercase mb-8">Admin Authentication</p>
           
           <form onSubmit={handleLogin} className="flex flex-col gap-5">
@@ -413,7 +409,8 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside className="w-64 border-r border-white/10 bg-[#0f0f0f] flex flex-col z-20">
         <div className="p-6 border-b border-white/10">
-          <h1 className="font-hero text-2xl tracking-wider text-white">VEKTOR</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo.png" alt="VEKTOR" className="h-6 w-auto object-contain mb-2" />
           <p className="text-[10px] text-gray-500 font-mono tracking-widest mt-1 uppercase">Admin Core</p>
         </div>
         
@@ -1087,18 +1084,38 @@ export default function AdminDashboard() {
               <h3 className="text-xl font-bold text-white mb-2 font-hero">Add Administrator</h3>
               <p className="text-sm text-gray-400 mb-6">Create a new admin account to access this panel.</p>
               
-              <form onSubmit={(e) => {
+              <form onSubmit={async (e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
-                const newAdmin: AdminUser = {
-                  id: `ADM-0${admins.length + 1}`,
-                  email: formData.get('email') as string,
-                  role: formData.get('role') as string,
-                  addedAt: new Date().toISOString()
-                };
-                setAdmins([...admins, newAdmin]);
-                setShowCreateAdmin(false);
-                showToast("Admin Added", `${newAdmin.email} has been granted access.`);
+                const email = formData.get('email') as string;
+                const password = formData.get('password') as string;
+                const role = formData.get('role') as string;
+                
+                try {
+                  // 1. Create a secondary app instance to avoid logging out the current admin
+                  const secondaryApp = getApps().find(a => a.name === "Secondary") || initializeApp({
+                    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+                    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+                    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+                  }, "Secondary");
+                  
+                  const secondaryAuth = getAuth(secondaryApp);
+                  
+                  // 2. Create the real Firebase user
+                  await secondaryCreateUser(secondaryAuth, email, password);
+                  await secondaryAuth.signOut(); // Clean up
+
+                  // 3. Save admin record to Firestore
+                  const newAdminData = { email, role, addedAt: new Date().toISOString() };
+                  const newId = await addAdminToDB(newAdminData);
+                  
+                  setAdmins([...admins, { id: newId, ...newAdminData }]);
+                  setShowCreateAdmin(false);
+                  showToast("Admin Added", `${email} can now log into this panel.`);
+                } catch (error: any) {
+                  console.error("Admin creation failed", error);
+                  showToast("Error", error.message || "Failed to create admin account.");
+                }
               }} className="flex flex-col gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Email Address</label>

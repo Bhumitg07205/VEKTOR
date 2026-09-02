@@ -166,12 +166,12 @@ export default function OurScope() {
             >
               {/* CRITICAL FIX: Restored transformStyle: "preserve-3d" ONLY to the grid and text columns.
                   This ensures the text flies in actual 3D space, but leaves the video untouched so it doesn't lag! */}
-              <div className="w-full max-w-[1440px] mx-auto px-8 md:px-16 lg:px-24 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center relative z-10" style={{ transformStyle: "preserve-3d" }}>
+              <div className="w-full max-w-[1440px] mx-auto px-5 md:px-16 lg:px-24 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center relative z-10 h-full overflow-y-auto lg:overflow-visible custom-scrollbar" style={{ transformStyle: "preserve-3d" }}>
                 
                 {/* ── LEFT: TEXT (3D ENABLED) ── */}
-                <div className="flex flex-col justify-center" style={{ transformStyle: "preserve-3d" }}>
+                <div className="flex flex-col justify-center mt-4 lg:mt-0" style={{ transformStyle: "preserve-3d" }}>
                   
-                  <div className="anim-up flex items-center gap-4 mb-6">
+                  <div className="anim-up flex items-center gap-4 mb-4 md:mb-6">
                     <span className="font-mono text-sm text-white font-bold tracking-[0.2em]">{project.num}</span>
                     <span className="w-10 h-px bg-white/20" />
                     <span className="flex items-center gap-2 font-mono text-[10px] text-white/50 tracking-[0.15em] uppercase">
@@ -180,32 +180,32 @@ export default function OurScope() {
                     </span>
                   </div>
 
-                  <div className="mb-6" style={{ transformStyle: "preserve-3d" }}>
-                    <h2 className="anim-up font-hero font-bold text-white leading-[0.92] tracking-[-0.03em] pb-1" style={{ fontSize: "clamp(3.5rem, 7vw, 6.5rem)" }}>
+                  <div className="mb-4 md:mb-6" style={{ transformStyle: "preserve-3d" }}>
+                    <h2 className="anim-up font-hero font-bold text-white leading-[0.92] tracking-[-0.03em] pb-1" style={{ fontSize: "clamp(3rem, 7vw, 6.5rem)" }}>
                       {project.title[0]}
                     </h2>
-                    <h2 className="anim-up font-hero font-bold text-secondary leading-[0.92] tracking-[-0.03em] pb-2" style={{ fontSize: "clamp(3.5rem, 7vw, 6.5rem)" }}>
+                    <h2 className="anim-up font-hero font-bold text-secondary leading-[0.92] tracking-[-0.03em] pb-2" style={{ fontSize: "clamp(3rem, 7vw, 6.5rem)" }}>
                       {project.title[1]}
                     </h2>
                   </div>
 
-                  <p className="anim-up font-script text-white/50 text-3xl md:text-4xl mb-8 -rotate-2 ml-2">
+                  <p className="anim-up font-script text-white/50 text-2xl md:text-4xl mb-4 md:mb-8 -rotate-2 ml-2">
                     {project.tagline}
                   </p>
 
-                  <p className="anim-up font-body text-white/60 text-[15px] md:text-base leading-[1.85] max-w-md mb-10">
+                  <p className="anim-up font-body text-white/60 text-[13px] md:text-base leading-[1.6] md:leading-[1.85] max-w-md mb-6 md:mb-10">
                     {project.desc}
                   </p>
 
-                  <div className="anim-up flex items-center gap-8 mb-10">
+                  <div className="anim-up flex items-center gap-6 md:gap-8 mb-6 md:mb-10">
                     <div>
-                      <div className="font-hero font-bold text-white text-3xl md:text-4xl leading-none">{project.funding}</div>
-                      <div className="font-mono text-[9px] text-white/30 tracking-[0.2em] uppercase mt-2">Funded</div>
+                      <div className="font-hero font-bold text-white text-2xl md:text-4xl leading-none">{project.funding}</div>
+                      <div className="font-mono text-[8px] md:text-[9px] text-white/30 tracking-[0.2em] uppercase mt-1 md:mt-2">Funded</div>
                     </div>
-                    <div className="w-px h-12 bg-white/10" />
+                    <div className="w-px h-10 md:h-12 bg-white/10" />
                     <div>
-                      <div className="font-hero font-bold text-white text-3xl md:text-4xl leading-none">{project.impact}</div>
-                      <div className="font-mono text-[9px] text-white/30 tracking-[0.2em] uppercase mt-2">{project.impactLabel}</div>
+                      <div className="font-hero font-bold text-white text-2xl md:text-4xl leading-none">{project.impact}</div>
+                      <div className="font-mono text-[8px] md:text-[9px] text-white/30 tracking-[0.2em] uppercase mt-1 md:mt-2">{project.impactLabel}</div>
                     </div>
                   </div>
 
@@ -227,7 +227,7 @@ export default function OurScope() {
                 </div>
 
                 {/* ── RIGHT: VIDEO (3D DISABLED FOR PERFORMANCE) ── */}
-                <div className="w-full flex items-center justify-center relative">
+                <div className="w-full flex items-center justify-center relative pb-12 lg:pb-0">
                   <video
                     src={project.video}
                     autoPlay

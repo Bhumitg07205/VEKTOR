@@ -4,25 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import BetaOnboardingModal from "./BetaOnboardingModal";
 
-function InstagramIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
-  );
-}
 
-function LinkedinIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-      <rect width="4" height="12" x="2" y="9" />
-      <circle cx="4" cy="4" r="2" />
-    </svg>
-  );
-}
 
 export default function Footer() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,19 +46,19 @@ export default function Footer() {
         <motion.div style={{ y: textY, opacity: textOpacity }} className="w-full relative">
           
           {/* Headline */}
-          <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 mb-16 relative">
+          <div className="text-center mb-10 md:mb-16 relative">
             <h2
-              className="font-hero font-medium text-white tracking-tight"
+              className="font-hero font-medium text-white tracking-tight leading-none"
               style={{ fontSize: "clamp(3.5rem, 8vw, 6.5rem)" }}
             >
-              Enter the
+              Enter the{" "}
+              <span
+                className="font-script text-secondary relative inline-block"
+                style={{ fontSize: "clamp(4.5rem, 12vw, 9rem)", top: "0.1em" }}
+              >
+                Core
+              </span>
             </h2>
-            <span
-              className="font-script text-secondary relative"
-              style={{ fontSize: "clamp(5rem, 12vw, 9rem)", top: "10px" }}
-            >
-              Core
-            </span>
           </div>
 
           {/* Center Form & Arrows */}
@@ -114,9 +96,9 @@ export default function Footer() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-absolute-black px-6 font-body text-base placeholder:text-gray-400"
+                className="flex-1 w-0 bg-transparent border-none outline-none text-absolute-black px-4 md:px-6 font-body text-sm md:text-base placeholder:text-gray-400"
               />
-              <button type="submit" className="bg-[#1a1a1a] hover:bg-black text-white px-8 py-3.5 rounded-full font-body font-bold text-sm transition-colors duration-200 shadow-md whitespace-nowrap">
+              <button type="submit" className="bg-[#1a1a1a] hover:bg-black text-white px-5 md:px-8 py-3 md:py-3.5 rounded-full font-body font-bold text-xs md:text-sm transition-colors duration-200 shadow-md whitespace-nowrap shrink-0">
                 Request Access
               </button>
             </form>
@@ -133,26 +115,10 @@ export default function Footer() {
       {/* Bottom bar */}
       <div className="w-full max-w-7xl mx-auto pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
         <div className="flex items-center gap-5">
-          <span className="font-mono font-bold tracking-[0.22em] uppercase text-white/80 text-sm">VEKTOR</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/Logo.png" alt="VEKTOR" className="h-6 w-auto object-contain opacity-90" />
           <span className="w-px h-4 bg-white/20" />
           <span className="text-white/50 text-sm font-body">© {new Date().getFullYear()}</span>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-6 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-white/50">
-          <a
-            href="mailto:team@vektor.yourcollegedomain"
-            className="hover:text-secondary transition-colors duration-200"
-          >
-            team@vektor.[domain]
-          </a>
-          <a href="#" className="hover:text-secondary transition-colors duration-200 flex items-center gap-1.5 cursor-pointer">
-            <InstagramIcon />
-            Instagram
-          </a>
-          <a href="#" className="hover:text-secondary transition-colors duration-200 flex items-center gap-1.5 cursor-pointer">
-            <LinkedinIcon />
-            LinkedIn
-          </a>
         </div>
       </div>
 

@@ -278,12 +278,12 @@ export default function HeroSection() {
           {/* STATE 0 */}
           <div ref={state0Ref} className="absolute w-full max-w-[88rem] flex flex-col items-center overflow-visible">
             <h1
-              className="font-hero font-bold text-white leading-[1.0] text-[clamp(3.5rem,11vw,10rem)] tracking-tight"
+              className="font-hero font-bold text-white leading-[1.0] text-[clamp(2.5rem,11vw,10rem)] tracking-tight"
               style={{ textShadow: "0 8px 40px rgba(0,0,0,0.8)" }}
             >
               <SplitWord text={STATES[0].line1} wordClass="word" />
             </h1>
-            <div className="font-script text-secondary leading-[1.0] text-[clamp(2.8rem,8.5vw,7.5rem)] mt-2 md:mt-4 -rotate-2 overflow-visible">
+            <div className="font-script text-secondary leading-[1.0] text-[clamp(1.8rem,8.5vw,7.5rem)] mt-2 md:mt-4 -rotate-2 overflow-visible">
               <SplitWord text={STATES[0].line2} wordClass="script-word" />
             </div>
           </div>
@@ -291,23 +291,23 @@ export default function HeroSection() {
           {/* STATE 1 */}
           <div ref={state1Ref} className="absolute w-full max-w-[88rem] flex flex-col items-center overflow-visible">
             <h1
-              className="font-hero font-bold text-white leading-[1.0] text-[clamp(3.5rem,10vw,9.5rem)] tracking-tight"
+              className="font-hero font-bold text-white leading-[1.0] text-[clamp(2.5rem,10vw,9.5rem)] tracking-tight"
               style={{ textShadow: "0 8px 40px rgba(0,0,0,0.8)" }}
             >
               <SplitWord text={STATES[1].line1} wordClass="word" />
             </h1>
-            <div className="font-script text-secondary leading-[1.0] text-[clamp(2.8rem,8.5vw,7.5rem)] mt-2 md:mt-4 -rotate-1 overflow-visible">
+            <div className="font-script text-secondary leading-[1.0] text-[clamp(1.8rem,8.5vw,7.5rem)] mt-2 md:mt-4 -rotate-1 overflow-visible">
               <SplitWord text={STATES[1].line2} wordClass="script-word" />
             </div>
           </div>
 
           {/* STATE 2 */}
           <div ref={state2Ref} className="absolute w-full max-w-[100rem] flex flex-col items-center overflow-visible">
-            <div className="font-script text-secondary leading-[1.0] text-[clamp(2.5rem,6.5vw,5.5rem)] mb-1 md:mb-4 -rotate-3 overflow-visible">
+            <div className="font-script text-secondary leading-[1.0] text-[clamp(1.8rem,6.5vw,5.5rem)] mb-1 md:mb-4 -rotate-3 overflow-visible">
               <SplitWord text={STATES[2].line1} wordClass="script-word" />
             </div>
             <h1
-              className="font-hero font-black text-white leading-[0.9] text-[clamp(6rem,18vw,16rem)] tracking-tighter uppercase"
+              className="font-hero font-black text-white leading-[0.9] text-[clamp(3.5rem,18vw,16rem)] tracking-tighter uppercase"
               style={{ textShadow: "0 20px 80px rgba(0,0,0,0.95)" }}
             >
               <SplitWord text={STATES[2].line2} wordClass="word" />

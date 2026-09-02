@@ -93,13 +93,16 @@ export default function SelectionProcess() {
               <p className="font-body text-base text-charcoal-stone leading-relaxed mb-8">
                 Every cycle, we pick a handful of juniors because real ownership only works in small numbers. If you&apos;re in, you&apos;re on the next funded build.
               </p>
-              <a
-                href="#"
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.dispatchEvent(new CustomEvent('open-onboarding'));
+                }}
                 className="inline-flex items-center gap-3 px-8 py-4 text-sm font-bold text-surface bg-absolute-black rounded-full hover:bg-deep-forest transition-colors duration-300 shadow-lg"
               >
                 Apply to Be Selected
                 <ArrowRight className="w-4 h-4" />
-              </a>
+              </button>
             </div>
           </div>
 

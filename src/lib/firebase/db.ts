@@ -8,7 +8,8 @@ import {
   query, 
   where,
   orderBy,
-  limit
+  limit,
+  getCountFromServer
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './config';
@@ -109,6 +110,27 @@ export const removeApplicant = async (id: string): Promise<void> => {
   await deleteDoc(docRef);
 };
 
+export const getQueueStats = async (): Promise<{ normalCount: number, priorityCount: number }> => {
+  try {
+    const qPriority = query(collection(db, APPLICANTS_COLLECTION), where('isPriority', '==', true));
+    const prioritySnap = await getCountFromServer(qPriority);
+    
+    const qNormal = query(collection(db, APPLICANTS_COLLECTION), where('isPriority', '==', false));
+    // Also consider those where isPriority is undefined or not set
+    // In firestore, if we just want normal, we can get total count and subtract priority
+    const totalSnap = await getCountFromServer(collection(db, APPLICANTS_COLLECTION));
+    
+    const priorityCount = prioritySnap.data().count;
+    const totalCount = totalSnap.data().count;
+    const normalCount = totalCount - priorityCount;
+
+    return { normalCount, priorityCount };
+  } catch (err) {
+    console.error("Error fetching queue stats:", err);
+    return { normalCount: 0, priorityCount: 0 };
+  }
+};
+
 /**
  * Uploads a resume file to Vercel Blob (bypassing all limitations)
  */
@@ -134,3 +156,35 @@ export const uploadResumeFile = async (file: File, userIdentifier: string): Prom
     return ""; 
   }
 };
+
+// --- Admins ---
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  addedAt: string;
+}
+
+const ADMINS_COLLECTION = 'admins';
+
+export const getAdmins = async (): Promise<AdminUser[]> => {
+  try {
+    const q = query(collection(db, ADMINS_COLLECTION), orderBy('addedAt', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminUser));
+  } catch {
+    const snapshot = await getDocs(collection(db, ADMINS_COLLECTION));
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminUser));
+  }
+};
+
+export const addAdminToDB = async (data: Omit<AdminUser, 'id'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, ADMINS_COLLECTION), data);
+  return docRef.id;
+};
+
+export const removeAdminFromDB = async (id: string): Promise<void> => {
+  const docRef = doc(db, ADMINS_COLLECTION, id);
+  await deleteDoc(docRef);
+};
+

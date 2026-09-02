@@ -97,23 +97,23 @@ function PortraitCard({ member, idx, large = false }: { member: typeof FOUNDERS[
         <div className="absolute z-30 inset-0 bg-gradient-to-t from-charcoal-stone/90 via-transparent to-transparent opacity-60 group-hover:opacity-30 transition-opacity duration-500 pointer-events-none mix-blend-multiply" />
         <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-secondary opacity-0 group-hover:opacity-100 transition-all duration-500 scale-0 group-hover:scale-100 z-40 shadow-[0_0_10px_rgba(56,162,81,1)]" />
 
-        <div className="absolute z-30 inset-x-0 bottom-0 p-6 flex flex-col justify-end translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out">
-           <span className="text-white font-mono text-[10px] tracking-widest uppercase flex items-center gap-2">
+        <div className="absolute z-30 inset-x-0 bottom-0 p-4 sm:p-6 flex flex-col justify-end translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500 ease-out">
+           <span className="text-white font-mono text-[8px] sm:text-[10px] tracking-widest uppercase flex items-center gap-2">
              Connect <span className="text-secondary">→</span>
            </span>
         </div>
       </div>
 
       <h3
-        className="font-body font-extrabold text-absolute-black mb-1.5 leading-tight group-hover:text-secondary transition-colors duration-300"
-        style={{ fontSize: "clamp(1.25rem, 2.5vw, 1.7rem)" }}
+        className="font-body font-extrabold text-absolute-black mb-1 md:mb-1.5 leading-tight group-hover:text-secondary transition-colors duration-300"
+        style={{ fontSize: "clamp(1rem, 2.5vw, 1.7rem)" }}
       >
         {member.name}
       </h3>
-      <div className="font-mono text-[10px] font-bold text-deep-forest uppercase tracking-[0.12em] mb-3 leading-tight">
+      <div className="font-mono text-[8px] md:text-[10px] font-bold text-deep-forest uppercase tracking-[0.12em] mb-2 md:mb-3 leading-tight">
         {member.role}
       </div>
-      <p className="font-body text-base text-on-surface-variant leading-relaxed">
+      <p className="font-body text-[13px] md:text-base text-on-surface-variant leading-relaxed line-clamp-3 md:line-clamp-none">
         {member.desc}
       </p>
     </a>
@@ -195,7 +195,7 @@ export default function TheCore() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mb-40 relative z-20">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 mb-24 md:mb-40 relative z-20">
           {FOUNDERS.map((f, i) => (
             <PortraitCard key={f.name} member={f} idx={i} large />
           ))}
@@ -212,7 +212,7 @@ export default function TheCore() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-secondary/15 rounded-full blur-[120px] pointer-events-none z-0" />
           
           {/* Decorative Scribbles with Parallax inside the dark section */}
-          <div className="absolute top-10 left-4 md:left-20 pointer-events-none z-10 opacity-80">
+          <div className="absolute top-10 left-4 md:left-20 pointer-events-none z-10 opacity-80 hidden md:block">
             <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-secondary drop-shadow-[0_0_15px_rgba(56,162,81,0.5)]">
               <path d="M10.5 90.5C35 85 85 65 105 20" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
               <path d="M85 15C95 18 102 20 105 20C105 20 102 28 100 35" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
@@ -245,7 +245,7 @@ export default function TheCore() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 max-w-6xl mx-auto relative z-20">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 max-w-6xl mx-auto relative z-20">
             {MENTORS.map((mentor, idx) => (
               <motion.div
                 key={mentor.name}
@@ -253,13 +253,13 @@ export default function TheCore() {
                 whileInView={{ opacity: 1, scale: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: idx * 0.1, ease: "easeOut" }}
-                className="flex flex-col sm:flex-row items-center sm:items-start gap-8 bg-white/[0.04] border border-white/10 rounded-[2rem] p-10 hover:bg-white/[0.08] hover:border-secondary/50 hover:shadow-[0_30px_60px_-15px_rgba(56,162,81,0.25)] transition-all duration-500 group backdrop-blur-sm"
+                className="flex flex-row items-center sm:items-start gap-4 sm:gap-8 bg-white/[0.04] border border-white/10 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-10 hover:bg-white/[0.08] hover:border-secondary/50 hover:shadow-[0_30px_60px_-15px_rgba(56,162,81,0.25)] transition-all duration-500 group backdrop-blur-sm"
               >
-                <div className="w-32 h-32 shrink-0 rounded-full overflow-hidden bg-black/50 border-2 border-white/10 group-hover:border-secondary relative transition-colors duration-500 shadow-2xl">
+                <div className="w-20 h-20 sm:w-32 sm:h-32 shrink-0 rounded-full overflow-hidden bg-black/50 border-2 border-white/10 group-hover:border-secondary relative transition-colors duration-500 shadow-2xl">
                   <div className="w-full h-full relative overflow-hidden rounded-full shadow-inner transition-transform duration-700 group-hover:scale-110">
                     
                     <div className="absolute inset-0 flex items-center justify-center z-10 transition-opacity duration-700 opacity-100">
-                      <span className="font-hero text-4xl font-bold text-white/20 select-none tracking-tighter">
+                      <span className="font-hero text-2xl sm:text-4xl font-bold text-white/20 select-none tracking-tighter">
                         {mentor.name.split(" ").map((n) => n[0]).join("")}
                       </span>
                     </div>
@@ -276,10 +276,10 @@ export default function TheCore() {
                     )}
                   </div>
                 </div>
-                <div className="text-center sm:text-left pt-2">
-                  <h4 className="font-body text-3xl font-extrabold text-white mb-2 group-hover:text-secondary transition-colors duration-300 tracking-tight">{mentor.name}</h4>
-                  <div className="font-mono text-xs font-bold text-secondary uppercase tracking-[0.2em] mb-4">{mentor.role}</div>
-                  <p className="font-body text-base text-white/60 leading-relaxed group-hover:text-white/80 transition-colors duration-300">{mentor.desc}</p>
+                <div className="text-left pt-1 sm:pt-2">
+                  <h4 className="font-body text-xl sm:text-3xl font-extrabold text-white mb-1 sm:mb-2 group-hover:text-secondary transition-colors duration-300 tracking-tight">{mentor.name}</h4>
+                  <div className="font-mono text-[9px] sm:text-xs font-bold text-secondary uppercase tracking-[0.2em] mb-2 sm:mb-4">{mentor.role}</div>
+                  <p className="font-body text-[13px] sm:text-base text-white/60 leading-snug sm:leading-relaxed group-hover:text-white/80 transition-colors duration-300">{mentor.desc}</p>
                 </div>
               </motion.div>
             ))}

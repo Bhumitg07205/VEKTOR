@@ -50,9 +50,9 @@ export default function FloatingNav() {
       <div className="flex items-center gap-3 bg-charcoal-stone/95 backdrop-blur-2xl border border-surface/[0.08] rounded-full px-3 py-2.5 shadow-[0_8px_40px_rgba(0,0,0,0.4)] pointer-events-auto">
 
         {/* Brand mark */}
-        <div className="w-10 h-10 rounded-full bg-charcoal-stone border border-surface/10 flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+        <div className="h-8 flex items-center justify-center shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="VEKTOR" className="w-[120%] h-[120%] object-cover scale-150" style={{ transform: "scale(1.8) translateY(1px)" }} />
+          <img src="/Logo.png" alt="VEKTOR" className="h-full w-auto object-contain" />
         </div>
 
         {/* Divider */}
