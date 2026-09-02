@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  /* â”€â”€ Surface Scale â”€â”€ */
+  --color-surface:              #FBFAF9;
+  --color-surface-lowest:       #FFFFFF;
+  --color-surface-dim:          #EEEEED;
+  --color-surface-bright:       #FAF9F8;
+  --color-surface-container:    #E9E8E7;
+  --color-on-surface:           #1A1C1C;
+  --color-on-surface-variant:   #414944;
+
+  /* â”€â”€ Outlines â”€â”€ */
+  --color-outline:              #717974;
+  --color-outline-variant:      #C0C8C3;
+
+  /* â”€â”€ Absolute â”€â”€ */
+  --color-absolute-black:       #000000;
+  --color-charcoal-stone:       #262424;
+
+  /* â”€â”€ Brand Green â”€â”€ */
+  --color-primary:              #003124;
+  --color-primary-container:    #1C4839;
+  --color-primary-fixed:        #BEEDD8;
+  --color-primary-fixed-dim:    #A2D0BC;
+  --color-on-primary:           #FFFFFF;
+  --color-on-primary-container: #89B6A3;
+
+  /* â”€â”€ Deep Forest (Action) â”€â”€ */
+  --color-deep-forest:          #0E895A;
+  --color-mint-glare:           #D4F6EB;
+
+  /* â”€â”€ Secondary â”€â”€ */
+  --color-secondary:            #38A251;
+  --color-secondary-container:  #8DF69B;
+  --color-on-secondary:         #FFFFFF;
+
+  /* â”€â”€ Tertiary â”€â”€ */
+  --color-tertiary:             #B6FFB6;
+  --color-tertiary-dim:         #90D792;
+
+  /* â”€â”€ Fonts â”€â”€ */
+  --font-hero: var(--font-hero);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+  --font-script: var(--font-script);
+}
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-charcoal-stone);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Font utilities */
+  .font-hero   { font-family: var(--font-hero); }
+  .font-body   { font-family: var(--font-body); }
+  .font-mono   { font-family: var(--font-mono); }
+  .font-script { font-family: var(--font-script); }
+
+  /* Smooth selection */
+  ::selection {
+    background-color: var(--color-mint-glare);
+    color: var(--color-primary);
+  }
+}
+
+/* â”€â”€ Reduced motion support â”€â”€ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
