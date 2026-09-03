@@ -315,12 +315,12 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
           animate={{ rotateY: isFlipped ? 180 : 0 }}
           transition={{ duration: 0.9, type: "spring", bounce: 0.12 }}
           className="relative w-full h-full max-w-[1400px] max-h-[95vh] min-h-[600px]"
-          style={{ transformStyle: "preserve-3d" }}
+          style={{ transformStyle: "preserve-3d", WebkitTransformStyle: "preserve-3d" }}
         >
           {/* FRONT: FORM */}
           <div
             className="absolute inset-0 bg-[#0a0a0a] border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row backface-hidden"
-            style={{ backfaceVisibility: "hidden", pointerEvents: isFlipped ? "none" : "auto" }}
+            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", pointerEvents: isFlipped ? "none" : "auto" }}
           >
             <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-50 transition-colors">✕</button>
 
@@ -459,7 +459,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
           {/* BACK: SUCCESS */}
           <div
             className="absolute inset-0 bg-[#FBFAF9] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row backface-hidden"
-            style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", pointerEvents: isFlipped ? "auto" : "none" }}
+            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)", pointerEvents: isFlipped ? "auto" : "none" }}
           >
             {/* Dark Left Side for 3D Model */}
             <div className="w-full md:w-3/5 relative bg-[#131413] min-h-[40vh] md:min-h-0">
