@@ -19,7 +19,7 @@ const STATES = [
     line2: "real systems running 24/7.",
   },
   {
-    line1: "Funded by the college.",
+    line1: "Backed by Thapar Institute",
     line2: "VEKTOR.",
   },
 ];

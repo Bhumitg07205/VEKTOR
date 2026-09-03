@@ -31,7 +31,7 @@ const STEPS = [
   {
     year: "2026",
     title: "An Elite Team Emerges",
-    desc: "This isn't just another college society. We are a high-performing team that executes relentlessly and shines at the absolute top.",
+    desc: "This isn't just another Thapar society. We are a high-performing team that executes relentlessly and shines at the absolute top.",
     note: "top tier",
   },
 ];

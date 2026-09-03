@@ -22,7 +22,7 @@ const PROJECTS = [
     impact: "3,000+",
     impactLabel: "daily users",
     stack: ["React", "Node.js", "Python", "MQTT"],
-    video: "/Preject1.mp4",
+    video: "/thproject1.mp4",
     icon: Zap,
     themeBg: "#050806",
   },
@@ -38,7 +38,7 @@ const PROJECTS = [
     impact: "24×7",
     impactLabel: "coverage",
     stack: ["OpenCV", "TensorFlow", "PostgreSQL", "Next.js"],
-    video: "/Project2.mp4",
+    video: "/thproject2.mp4",
     icon: ShieldCheck,
     themeBg: "#07090b",
   },
@@ -47,7 +47,7 @@ const PROJECTS = [
 export default function OurScope() {
   const headerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
-  
+
   const [showPopup, setShowPopup] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -55,12 +55,12 @@ export default function OurScope() {
   const handleCaseStudyClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setShowPopup(true);
-    
+
     // Slight delay to ensure DOM is updated before animating
     setTimeout(() => {
       gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" });
-      gsap.fromTo(popupRef.current, 
-        { scale: 0.8, opacity: 0, y: 40 }, 
+      gsap.fromTo(popupRef.current,
+        { scale: 0.8, opacity: 0, y: 40 },
         { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "back.out(1.5)", delay: 0.1 }
       );
     }, 10);
@@ -102,9 +102,10 @@ export default function OurScope() {
       // ── 2. PROJECT 1 TEXT ENTRY (Cinematic 3D) ──
       gsap.fromTo(q1('.anim-up'),
         { z: 500, scale: 1.5, opacity: 0, y: 150, filter: "blur(10px)" },
-        { z: 0, scale: 1, opacity: 1, y: 0, filter: "blur(0px)", stagger: 0.06, duration: 1.5, ease: "expo.out",
-          scrollTrigger: { 
-            trigger: pinRef.current, 
+        {
+          z: 0, scale: 1, opacity: 1, y: 0, filter: "blur(0px)", stagger: 0.06, duration: 1.5, ease: "expo.out",
+          scrollTrigger: {
+            trigger: pinRef.current,
             start: "top 75%",
             toggleActions: "play none none reverse"
           }
@@ -127,9 +128,9 @@ export default function OurScope() {
 
       // P1 TEXT Exits (Cinematic 3D - flies forward into camera)
       // FIX: Added immediateRender: false to prevent this tween from fighting with the Entry tween on load
-      masterTl.fromTo(q1('.anim-up'), 
+      masterTl.fromTo(q1('.anim-up'),
         { z: 0, scale: 1, opacity: 1, y: 0, filter: "blur(0px)" },
-        { z: 600, scale: 2, opacity: 0, y: -100, filter: "blur(20px)", stagger: 0.05, duration: 1.5, ease: "power3.in", immediateRender: false }, 
+        { z: 600, scale: 2, opacity: 0, y: -100, filter: "blur(20px)", stagger: 0.05, duration: 1.5, ease: "power3.in", immediateRender: false },
         "wipe"
       );
 
@@ -154,7 +155,7 @@ export default function OurScope() {
 
   return (
     <section id="scope" className="bg-[#050806] rounded-t-[40px] -mt-[40px] pt-12 relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-      
+
       {/* ── STATIC HEADER ── */}
       <div ref={headerRef} className="max-w-[1440px] mx-auto px-8 md:px-16 lg:px-24 pt-20 pb-4 relative z-30">
         <p className="sr font-mono text-[11px] text-secondary/60 tracking-[0.4em] uppercase mb-4">
@@ -171,29 +172,29 @@ export default function OurScope() {
 
       {/* ── PINNED ARENA ── */}
       <div ref={pinRef} className="h-screen w-full relative overflow-hidden bg-[#050806]">
-        
+
         {PROJECTS.map((project, i) => {
           const Icon = project.icon;
           return (
             <div
               key={project.id}
               className="project-panel absolute w-full h-full flex items-center justify-center pt-4 pb-12"
-              style={{ 
-                backgroundColor: project.themeBg, 
+              style={{
+                backgroundColor: project.themeBg,
                 zIndex: i,
                 top: i === 0 ? "0%" : "100%",
                 left: 0,
                 right: 0,
-                perspective: "2000px", 
+                perspective: "2000px",
               }}
             >
               {/* CRITICAL FIX: Restored transformStyle: "preserve-3d" ONLY to the grid and text columns.
                   This ensures the text flies in actual 3D space, but leaves the video untouched so it doesn't lag! */}
               <div className="w-full max-w-[1440px] mx-auto px-5 md:px-16 lg:px-24 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center relative z-10 h-full overflow-y-auto lg:overflow-visible custom-scrollbar" style={{ transformStyle: "preserve-3d" }}>
-                
+
                 {/* ── LEFT: TEXT (3D ENABLED) ── */}
                 <div className="flex flex-col justify-center mt-4 lg:mt-0" style={{ transformStyle: "preserve-3d" }}>
-                  
+
                   <div className="anim-up flex items-center gap-4 mb-4 md:mb-6">
                     <span className="font-mono text-sm text-white font-bold tracking-[0.2em]">{project.num}</span>
                     <span className="w-10 h-px bg-white/20" />
@@ -272,37 +273,37 @@ export default function OurScope() {
 
       {/* ── CASE STUDY POPUP ── */}
       {showPopup && (
-        <div 
+        <div
           ref={overlayRef}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 opacity-0"
           onClick={closePopup}
         >
-          <div 
+          <div
             ref={popupRef}
             className="bg-surface border border-black/10 rounded-3xl p-8 md:p-12 max-w-xl w-full shadow-[0_20px_80px_rgba(0,0,0,0.2)] relative text-center opacity-0 scale-90"
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
+            <button
               onClick={closePopup}
               className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors text-black"
             >
               ✕
             </button>
-            
+
             <div className="mb-6 mx-auto flex w-16 h-16 rounded-full bg-secondary/10 items-center justify-center">
               <Zap className="text-secondary" size={32} />
             </div>
-            
+
             <h3 className="font-hero font-bold text-absolute-black text-3xl md:text-5xl mb-4 leading-tight">
               Oops!
             </h3>
-            
+
             <p className="font-body text-black/70 text-lg md:text-xl mb-8 leading-relaxed">
-              To know about this, learn, & apply your brains, you need to apply in Vektor.<br/>
+              To know about this, learn, & apply your brains, you need to apply in Vektor.<br />
               <span className="text-deep-forest font-semibold block mt-4 text-2xl font-script">Join the Vektor team!</span>
             </p>
-            
-            <button 
+
+            <button
               onClick={(e) => {
                 e.preventDefault();
                 closePopup();

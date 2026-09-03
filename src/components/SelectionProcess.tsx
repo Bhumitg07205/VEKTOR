@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react";
 const BENEFITS = [
   { num: "01", title: "Real Ownership", desc: "You work on the next funded, deployed project — not a mock assignment or a hackathon side-quest." },
   { num: "02", title: "Direct Mentorship", desc: "Learn straight from the founders of two funded, campus-deployed systems. Not a senior-year TA." },
-  { num: "03", title: "Administration Access", desc: "Work alongside the same college administration that funds and greenlights our projects." },
+  { num: "03", title: "Administration Access", desc: "Work alongside the same Thapar administration that funds and greenlights our projects." },
   { num: "04", title: "A Portfolio That Proves It", desc: "Walk out with real, live work — not a GitHub repo nobody ever funded or used." },
 ];
 

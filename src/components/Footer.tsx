@@ -118,7 +118,7 @@ export default function Footer() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo.png" alt="VEKTOR" className="h-6 w-auto object-contain opacity-90" />
           <span className="w-px h-4 bg-white/20" />
-          <span className="text-white/50 text-sm font-body">© {new Date().getFullYear()}</span>
+          <span className="text-white/50 text-sm font-body">© {new Date().getFullYear()} VEKTOR - Thapar Institute of Engineering & Technology, Patiala</span>
         </div>
       </div>
 
