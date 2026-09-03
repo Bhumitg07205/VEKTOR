@@ -157,6 +157,52 @@ export async function POST(req: Request) {
       `;
       htmlContent = generateTemplate('VEKTOR - Interview', 'Evaluation Phase', colors.accent, innerHtml);
 
+    } else if (status === 'Interview Edited') {
+        const formattedDate = interviewDate ? new Date(interviewDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' }) : 'To be assigned';
+        
+        let locHtml = '';
+        if (interviewLocation) {
+          const locLabel = interviewLocationType === 'virtual' ? 'Meeting URL' : 'Physical Location';
+          locHtml = `
+            <tr>
+              <td style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-left: 4px solid ${colors.warning}; padding: 24px; border-radius: 8px; border-top: none; margin-top: 8px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.warning}; font-weight: 700; margin-bottom: 8px;">${locLabel}</div>
+                <div style="font-size: 16px; font-weight: 500; color: #e5e5e5; letter-spacing: 0.5px;">${interviewLocation}</div>
+              </td>
+            </tr>
+          `;
+        }
+
+        subject = `ACTION REQUIRED: Interview Updated`;
+        const innerHtml = `
+          <h2 style="font-size: 24px; margin-bottom: 24px; color: #ffffff; font-weight: 500; letter-spacing: -0.5px;">Update for ${applicantName}.</h2>
+          <p style="margin-bottom: 24px; line-height: 1.7;">Your interview coordinates have been recalibrated. Please update your local systems accordingly.</p>
+          
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 32px 0; border-collapse: separate; border-spacing: 0 8px;">
+            <tr>
+              <td style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2); border-left: 4px solid ${colors.warning}; padding: 24px; border-radius: 8px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.warning}; font-weight: 700; margin-bottom: 8px;">New Temporal Coordinates</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ffffff; letter-spacing: 0.5px;">${formattedDate}</div>
+              </td>
+            </tr>
+            ${locHtml}
+          </table>
+      `;
+      htmlContent = generateTemplate('VEKTOR - Interview Update', 'Evaluation Phase', colors.warning, innerHtml);
+      
+    } else if (status === 'Interview Cancelled') {
+      subject = `NOTICE: Interview Cancelled`;
+      const innerHtml = `
+        <h2 style="font-size: 24px; margin-bottom: 24px; color: #ffffff; font-weight: 500; letter-spacing: -0.5px;">Notice for ${applicantName}.</h2>
+        <p style="margin-bottom: 24px; line-height: 1.7;">Your scheduled interview has been officially cancelled by the core team.</p>
+        <p style="margin-bottom: 24px; line-height: 1.7;">Your application remains in the system and is currently under review. Further instructions will follow.</p>
+        
+        <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-left: 4px solid ${colors.danger}; padding: 24px; border-radius: 8px; margin: 32px 0;">
+          <div style="font-size: 15px; color: #ffffff; line-height: 1.6;">Please stand by for further communications.</div>
+        </div>
+      `;
+      htmlContent = generateTemplate('VEKTOR - Interview Cancelled', 'Evaluation Phase', colors.danger, innerHtml);
+
     } else if (status === 'Rejected') {
       subject = `DECISION: Application Status`;
       const innerHtml = `
@@ -164,6 +210,12 @@ export async function POST(req: Request) {
         <p style="margin-bottom: 24px; line-height: 1.7;">We have finalized the analysis of your application payload.</p>
         <p style="margin-bottom: 24px; line-height: 1.7;">Due to current bandwidth limitations and intense competition, we are unable to process your inclusion into the current cohort.</p>
         
+        ${customNote ? `
+        <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-left: 4px solid ${colors.danger}; padding: 24px; border-radius: 8px; margin: 32px 0;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.danger}; font-weight: 700; margin-bottom: 8px;">Direct Feedback</div>
+          <div style="font-size: 15px; color: #ffffff; line-height: 1.6;">${customNote.replace(/\n/g, '<br>')}</div>
+        </div>` : ''}
+
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); padding: 24px; border-radius: 8px; margin: 32px 0;">
           <p style="margin: 0; color: #a3a3a3; line-height: 1.6; font-size: 15px;">We recommend continuous iteration of your skills. The system will remain open for future cycles. Keep building.</p>
         </div>

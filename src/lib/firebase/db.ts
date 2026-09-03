@@ -213,3 +213,61 @@ export const removeAdminFromDB = async (id: string): Promise<void> => {
   await deleteDoc(docRef);
 };
 
+export const updateAdminRole = async (id: string, newRole: string): Promise<void> => {
+  const docRef = doc(db, ADMINS_COLLECTION, id);
+  await updateDoc(docRef, { role: newRole });
+};
+
+export interface AuditLog {
+  id?: string;
+  adminEmail: string;
+  actionType: string;
+  details: string;
+  timestamp: string;
+}
+
+const AUDIT_LOGS_COLLECTION = 'audit_logs';
+
+export const addAuditLog = async (log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<void> => {
+  try {
+    const newLog = {
+      ...log,
+      timestamp: new Date().toISOString()
+    };
+    await addDoc(collection(db, AUDIT_LOGS_COLLECTION), newLog);
+  } catch (error) {
+    console.error('Failed to add audit log:', error);
+  }
+};
+
+export const getAuditLogs = async (): Promise<AuditLog[]> => {
+  try {
+    const q = query(collection(db, AUDIT_LOGS_COLLECTION), orderBy('timestamp', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog));
+  } catch (error) {
+    console.error('Failed to fetch audit logs, trying without index:', error);
+    try {
+      const snapshot = await getDocs(collection(db, AUDIT_LOGS_COLLECTION));
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch (e) {
+      console.error('Fallback failed:', e);
+      return [];
+    }
+  }
+};
+export const clearAllAuditLogs = async (): Promise<void> => {
+  try {
+    const q = query(collection(db, AUDIT_LOGS_COLLECTION));
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+  } catch (error) {
+    console.error("Error clearing audit logs:", error);
+    throw error;
+  }
+};
+export const deleteAuditLog = async (id: string): Promise<void> => {
+  const docRef = doc(db, AUDIT_LOGS_COLLECTION, id);
+  await deleteDoc(docRef);
+};
