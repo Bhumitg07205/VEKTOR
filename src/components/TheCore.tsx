@@ -18,7 +18,7 @@ const FOUNDERS = [
 ];
 
 const MENTORS = [
-  { name: "Neeru Jindal", role: "Associate Head OF ECED", desc: "The catalyst. She is everything to us—backed the vision before it even existed.", img: "/Neeru.png" },
+  { name: "Neeru Jindal", role: "Supervisor, Mentor & Associate Head of ECED", desc: "The catalyst. She gave us the scope and is everything to us—backed the vision before it even existed.", img: "/Neeru.png" },
   { name: "Amanpreet Singh", role: "Technical Mentor", desc: "The architectural guiding hand that helped turn our raw concepts into a deployed reality.", img: "/Amanpreet.jpg" },
   { name: "Gurbinder Singh", role: "Registrar & Head", desc: "The supreme administrative authority and foundation of the initiative.", img: "/Gurbinder.png" },
   { name: "NP Singh", role: "Head of Commercial, Thapar", desc: "The absolute backbone of our resources and foundational supporter.", img: "" },
@@ -245,7 +245,7 @@ export default function TheCore() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 max-w-6xl mx-auto relative z-20">
+          <div className="flex flex-wrap justify-center gap-6 md:gap-10 max-w-6xl mx-auto relative z-20">
             {MENTORS.map((mentor, idx) => (
               <motion.div
                 key={mentor.name}
@@ -253,7 +253,7 @@ export default function TheCore() {
                 whileInView={{ opacity: 1, scale: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.7, delay: idx * 0.1, ease: "easeOut" }}
-                className="flex flex-row items-center sm:items-start gap-4 sm:gap-8 bg-white/[0.04] border border-white/10 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-10 hover:bg-white/[0.08] hover:border-secondary/50 hover:shadow-[0_30px_60px_-15px_rgba(56,162,81,0.25)] transition-all duration-500 group backdrop-blur-sm"
+                className="w-full md:w-[calc(50%-1.25rem)] flex flex-row items-center sm:items-start gap-4 sm:gap-8 bg-white/[0.04] border border-white/10 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-10 hover:bg-white/[0.08] hover:border-secondary/50 hover:shadow-[0_30px_60px_-15px_rgba(56,162,81,0.25)] transition-all duration-500 group backdrop-blur-sm"
               >
                 <div className="w-20 h-20 sm:w-32 sm:h-32 shrink-0 rounded-full overflow-hidden bg-black/50 border-2 border-white/10 group-hover:border-secondary relative transition-colors duration-500 shadow-2xl">
                   <div className="w-full h-full relative overflow-hidden rounded-full shadow-inner transition-transform duration-700 group-hover:scale-110">

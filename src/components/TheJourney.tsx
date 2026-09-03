@@ -11,28 +11,28 @@ if (typeof window !== "undefined") {
 
 const STEPS = [
   {
-    year: "2023",
-    title: "Three Students. No Shortcuts.",
-    desc: "We didn't start this for a certificate. We started it to fix something broken on our own campus.",
+    year: "2026",
+    title: "The Vision Takes Shape",
+    desc: "We didn't just start a project; we launched a full-scale initiative to solve real infrastructure challenges on our campus.",
     note: "origin",
   },
   {
-    year: "2023",
-    title: "Parking, Solved.",
-    desc: "₹8,00,000 funded. Built. Deployed. Used by every student who drives in.",
+    year: "2026",
+    title: "Parking Infrastructure: Deployed",
+    desc: "Secured ₹8,00,000 in funding. Fully built, tested, and live. Now delivering a seamless parking experience for all faculty members.",
     note: "₹8L funded",
   },
   {
-    year: "2024",
-    title: "Security, Automated.",
-    desc: "₹2,00,000 funded. Built. Deployed. Watching over the campus, every single day.",
+    year: "2026",
+    title: "Security System: In Development",
+    desc: "Backed by ₹2,00,000. Our Visitor Pass Management system is currently under making. Not fully built yet, but preparing to upgrade campus security.",
     note: "₹2L funded",
   },
   {
-    year: "2024",
-    title: "The Society Was Born.",
-    desc: "We stopped being a 3-person team and became something juniors could actually join.",
-    note: "now open",
+    year: "2026",
+    title: "An Elite Team Emerges",
+    desc: "This isn't just another college society. We are a high-performing team that executes relentlessly and shines at the absolute top.",
+    note: "top tier",
   },
 ];
 

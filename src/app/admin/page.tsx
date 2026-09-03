@@ -130,6 +130,8 @@ export default function AdminDashboard() {
   const [showInterviewModal, setShowInterviewModal] = useState(false);
   const [interviewDate, setInterviewDate] = useState('');
   const [interviewTime, setInterviewTime] = useState('');
+  const [interviewLocationType, setInterviewLocationType] = useState<'offline' | 'virtual'>('virtual');
+  const [interviewLocation, setInterviewLocation] = useState('');
   
   // Create / Admin modals
   const [showCreateApplicant, setShowCreateApplicant] = useState(false);
@@ -203,7 +205,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const triggerEmailNotification = async (recipientEmail: string, name: string, newStatus: ApplicationStatus, interview?: string) => {
+  const triggerEmailNotification = async (recipientEmail: string, name: string, newStatus: ApplicationStatus, interview?: string, interviewLocType?: string, interviewLoc?: string) => {
     if (!recipientEmail || !autoEmailEnabled) return;
     try {
       const res = await fetch('/api/send-email', {
@@ -213,7 +215,9 @@ export default function AdminDashboard() {
           to: recipientEmail,
           applicantName: name,
           status: newStatus,
-          interviewDate: interview
+          interviewDate: interview,
+          interviewLocationType: interviewLocType,
+          interviewLocation: interviewLoc
         })
       });
       const data = await res.json();
@@ -269,18 +273,18 @@ export default function AdminDashboard() {
     const dateTime = `${interviewDate}T${interviewTime}:00Z`;
     
     try {
-      await updateApplicant(selectedApplicant.id, { status: 'Interview', interviewDate: dateTime });
+      await updateApplicant(selectedApplicant.id, { status: 'Interview', interviewDate: dateTime, interviewLocationType, interviewLocation });
       setApplicants(prev => prev.map(app => 
         app.id === selectedApplicant.id 
-          ? { ...app, status: 'Interview', interviewDate: dateTime } 
+          ? { ...app, status: 'Interview', interviewDate: dateTime, interviewLocationType, interviewLocation } 
           : app
       ));
       
-      setSelectedApplicant(prev => prev ? { ...prev, status: 'Interview', interviewDate: dateTime } : null);
+      setSelectedApplicant(prev => prev ? { ...prev, status: 'Interview', interviewDate: dateTime, interviewLocationType, interviewLocation } : null);
       setShowInterviewModal(false);
       
       if (selectedApplicant.email) {
-        await triggerEmailNotification(selectedApplicant.email, selectedApplicant.name, 'Interview', dateTime);
+        await triggerEmailNotification(selectedApplicant.email, selectedApplicant.name, 'Interview', dateTime, interviewLocationType, interviewLocation);
       } else {
         showToast("Interview Scheduled", `Invite sent to ${selectedApplicant.name}.`);
       }
@@ -406,8 +410,8 @@ export default function AdminDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-white/10 bg-[#0f0f0f] flex flex-col z-20">
+      {/* Sidebar (Desktop) */}
+      <aside className="hidden md:flex w-64 border-r border-white/10 bg-[#0f0f0f] flex-col z-20">
         <div className="p-6 border-b border-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/Logo.png" alt="VEKTOR" className="h-6 w-auto object-contain mb-2" />
@@ -448,14 +452,47 @@ export default function AdminDashboard() {
         </nav>
       </aside>
 
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0f0f0f] border-t border-white/10 z-50 flex justify-around p-2 pb-safe">
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <LayoutDashboard size={20} />
+          <span className="text-[10px]">Dashboard</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('applicants')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'applicants' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <Users size={20} />
+          <span className="text-[10px]">Applicants</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('admins')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'admins' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <Shield size={20} />
+          <span className="text-[10px]">Admins</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'settings' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <Settings size={20} />
+          <span className="text-[10px]">Settings</span>
+        </button>
+      </nav>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="h-20 border-b border-white/10 flex items-center justify-between px-8 bg-[#0a0a0a]/80 backdrop-blur-md z-10">
-          <h2 className="text-xl font-bold tracking-wide text-white capitalize">
-            {activeTab === 'applicants' ? 'Applicant Tracking System' : activeTab}
+        <header className="h-16 md:h-20 border-b border-white/10 flex items-center justify-between px-4 md:px-8 bg-[#0a0a0a]/80 backdrop-blur-md z-10">
+          <h2 className="text-lg md:text-xl font-bold tracking-wide text-white capitalize truncate pr-2">
+            {activeTab === 'applicants' ? <span className="hidden md:inline">Applicant Tracking System</span> : null}
+            {activeTab === 'applicants' ? <span className="md:hidden">Applicants</span> : activeTab}
           </h2>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-gray-400 border border-white/10 px-3 py-1.5 rounded-full bg-white/5">
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="hidden md:flex items-center gap-2 text-sm text-gray-400 border border-white/10 px-3 py-1.5 rounded-full bg-white/5">
               <Mail size={14} className={autoEmailEnabled ? "text-green-500" : "text-gray-500"} />
               <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">
                 Auto-Email: {autoEmailEnabled ? 'ON' : 'OFF'}
@@ -465,14 +502,20 @@ export default function AdminDashboard() {
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
               <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">System Online</span>
             </div>
+            <button 
+              onClick={() => signOut(auth)}
+              className="md:hidden p-2 text-red-400 bg-red-400/10 rounded-lg hover:bg-red-400/20"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative z-0 pb-32">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-0 pb-32 md:pb-8">
           
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               <div className="bg-[#111] border border-white/10 p-6 rounded-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-all group-hover:bg-blue-500/20"></div>
                 <p className="text-gray-400 text-sm font-medium uppercase tracking-wider mb-2">Total Applied</p>
@@ -537,11 +580,11 @@ export default function AdminDashboard() {
 
               {/* Table / List */}
               <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden flex-1 flex flex-col">
-                <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 bg-white/5 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b border-white/10 bg-white/5 text-xs font-bold uppercase tracking-wider text-gray-400">
                   <div className="col-span-3">Applicant</div>
                   <div className="col-span-2">Reg No</div>
-                  <div className="col-span-2">Branch / Year</div>
-                  <div className="col-span-3">Status</div>
+                  <div className="col-span-3">Branch / Year</div>
+                  <div className="col-span-2">Status</div>
                   <div className="col-span-2 text-right">Actions</div>
                 </div>
                 
@@ -552,33 +595,48 @@ export default function AdminDashboard() {
                         key={app.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`grid grid-cols-12 gap-4 p-4 border-b border-white/5 hover:bg-white/[0.04] items-center transition-colors cursor-pointer ${app.isPriority ? 'bg-yellow-500/[0.02]' : ''}`}
+                        className={`flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 p-4 border-b border-white/5 hover:bg-white/[0.04] md:items-center transition-colors cursor-pointer ${app.isPriority ? 'bg-yellow-500/[0.02]' : ''}`}
                         onClick={() => { setSelectedApplicant(app); setIsEditingApplicant(false); }}
                       >
-                        <div className="col-span-3 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-sm border border-white/10 relative">
-                            {app.name.charAt(0)}
-                            {app.isPriority && (
-                              <div className="absolute -top-1 -right-1 bg-yellow-500 text-black rounded-full p-0.5">
-                                <Star size={10} className="fill-black" />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-bold text-white text-sm flex items-center gap-2">
-                              {app.name}
+                        <div className="md:col-span-3 flex items-center justify-between md:justify-start gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-sm border border-white/10 relative">
+                              {app.name.charAt(0)}
+                              {app.isPriority && (
+                                <div className="absolute -top-1 -right-1 bg-yellow-500 text-black rounded-full p-0.5">
+                                  <Star size={10} className="fill-black" />
+                                </div>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500">{new Date(app.appliedDate).toLocaleDateString()}</div>
+                            <div>
+                              <div className="font-bold text-white text-sm flex items-center gap-2">
+                                {app.name}
+                              </div>
+                              <div className="text-xs text-gray-500">{new Date(app.appliedDate).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                          
+                          <span className={`md:hidden px-3 py-1 rounded-full text-[10px] font-bold border flex w-fit items-center gap-1.5 ${getStatusColor(app.status)}`}>
+                            {app.status === 'Pending' && <Clock size={10} />}
+                            {app.status === 'Reviewing' && <BookOpen size={10} />}
+                            {app.status === 'Interview' && <CalendarDays size={10} />}
+                            {app.status === 'Accepted' && <CheckCircle size={10} />}
+                            {app.status === 'Rejected' && <XCircle size={10} />}
+                            {app.status}
+                          </span>
+                        </div>
+                        <div className="md:col-span-2 flex md:flex-col items-center md:items-start justify-between text-sm md:text-left">
+                          <span className="text-gray-500 md:hidden text-xs">Reg No:</span>
+                          <div className="text-right md:text-left">
+                            <span className="text-sm text-gray-300 font-mono block">{app.regNo}</span>
+                            <span className="hidden md:block text-[10px] text-gray-500 truncate pr-2" title={app.email}>{app.email}</span>
                           </div>
                         </div>
-                        <div className="col-span-2 flex flex-col">
-                          <span className="text-sm text-gray-300 font-mono">{app.regNo}</span>
-                          <span className="text-[10px] text-gray-500 truncate pr-2" title={app.email}>{app.email}</span>
+                        <div className="md:col-span-3 flex md:block items-center justify-between text-sm text-gray-300">
+                          <span className="text-gray-500 md:hidden text-xs">Branch:</span>
+                          <span className="text-right md:text-left">{app.branch} <span className="text-gray-600">· Yr {app.year}</span></span>
                         </div>
-                        <div className="col-span-2 text-sm text-gray-300">
-                          {app.branch} <span className="text-gray-600">· Yr {app.year}</span>
-                        </div>
-                        <div className="col-span-3">
+                        <div className="hidden md:flex md:col-span-2">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold border flex w-fit items-center gap-1.5 ${getStatusColor(app.status)}`}>
                             {app.status === 'Pending' && <Clock size={12} />}
                             {app.status === 'Reviewing' && <BookOpen size={12} />}
@@ -588,7 +646,7 @@ export default function AdminDashboard() {
                             {app.status}
                           </span>
                         </div>
-                        <div className="col-span-2 flex justify-end gap-2">
+                        <div className="hidden md:flex md:col-span-2 justify-end gap-2">
                           <button 
                             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
                             onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setIsEditingApplicant(false); }}
@@ -626,27 +684,33 @@ export default function AdminDashboard() {
               </div>
 
               <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden">
-                <div className="grid grid-cols-4 gap-4 p-4 border-b border-white/10 bg-white/5 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <div className="hidden md:grid grid-cols-4 gap-4 p-4 border-b border-white/10 bg-white/5 text-xs font-bold uppercase tracking-wider text-gray-400">
                   <div className="col-span-2">User / Email</div>
                   <div>Role</div>
                   <div>Added On</div>
                 </div>
                 
                 {admins.map(admin => (
-                  <div key={admin.id} className="grid grid-cols-4 gap-4 p-4 border-b border-white/5 items-center">
-                    <div className="col-span-2 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-gray-400">
-                        <Lock size={16} />
+                  <div key={admin.id} className="flex flex-col md:grid md:grid-cols-4 gap-3 md:gap-4 p-4 border-b border-white/5 md:items-center">
+                    <div className="md:col-span-2 flex items-center justify-between md:justify-start gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-gray-400">
+                          <Lock size={16} />
+                        </div>
+                        <span className="font-bold text-white text-sm">{admin.email}</span>
                       </div>
-                      <span className="font-bold text-white text-sm">{admin.email}</span>
+                      <span className="md:hidden px-3 py-1 rounded-full text-[10px] font-bold border border-blue-500/30 bg-blue-500/10 text-blue-400">
+                        {admin.role}
+                      </span>
                     </div>
-                    <div>
+                    <div className="hidden md:block">
                       <span className="px-3 py-1 rounded-full text-xs font-bold border border-blue-500/30 bg-blue-500/10 text-blue-400">
                         {admin.role}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500 font-mono">
-                      {new Date(admin.addedAt).toLocaleDateString()}
+                    <div className="text-sm text-gray-500 font-mono flex items-center justify-between md:block">
+                      <span className="text-xs md:hidden">Added:</span>
+                      <span>{new Date(admin.addedAt).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
@@ -718,9 +782,9 @@ export default function AdminDashboard() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#111]">
+              <div className="p-4 md:p-6 border-b border-white/10 flex flex-col md:flex-row justify-between md:items-center gap-4 bg-[#111]">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl border border-white/10 relative">
+                  <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl border border-white/10 relative">
                     {selectedApplicant.name.charAt(0)}
                     {selectedApplicant.isPriority && (
                       <div className="absolute -top-1 -right-1 bg-yellow-500 text-black rounded-full p-1 shadow-[0_0_10px_rgba(234,179,8,0.5)]">
@@ -729,30 +793,30 @@ export default function AdminDashboard() {
                     )}
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-white font-hero tracking-wide flex items-center gap-3">
+                    <h2 className="text-xl md:text-2xl font-bold text-white font-hero tracking-wide flex items-center gap-3">
                       {isEditingApplicant ? (
                         <input
                           value={editForm.name || ''}
                           onChange={e => setEditForm({...editForm, name: e.target.value})}
-                          className="bg-[#1a1a1a] border border-white/10 rounded px-3 py-1 text-xl font-body text-white focus:outline-none focus:border-blue-500"
+                          className="bg-[#1a1a1a] border border-white/10 rounded px-3 py-1 text-lg md:text-xl font-body text-white focus:outline-none focus:border-blue-500 w-full max-w-[200px]"
                         />
                       ) : (
                         selectedApplicant.name
                       )}
                     </h2>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="text-sm font-mono text-gray-400">{selectedApplicant.id}</span>
+                      <span className="text-xs md:text-sm font-mono text-gray-400 truncate">{selectedApplicant.id}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(selectedApplicant.status)}`}>
                         {selectedApplicant.status}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
                   {selectedApplicant.status !== 'Accepted' && (
                     <button 
                       onClick={() => updateStatus(selectedApplicant.id, 'Accepted')}
-                      className="bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                      className="flex-1 md:flex-none bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-colors flex items-center justify-center gap-2"
                     >
                       <CheckCircle size={16} /> Accept
                     </button>
@@ -760,25 +824,25 @@ export default function AdminDashboard() {
                   {selectedApplicant.status !== 'Rejected' && (
                     <button 
                       onClick={() => updateStatus(selectedApplicant.id, 'Rejected')}
-                      className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                      className="flex-1 md:flex-none bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-colors flex items-center justify-center gap-2"
                     >
                       <XCircle size={16} /> Reject
                     </button>
                   )}
                   
-                  <div className="w-px h-8 bg-white/10 mx-2"></div>
+                  <div className="hidden md:block w-px h-8 bg-white/10 mx-2"></div>
                   
                   <button 
                     onClick={() => deleteApplicant(selectedApplicant.id, selectedApplicant.name)}
                     className="p-2 hover:bg-red-500/20 rounded-lg text-gray-500 hover:text-red-500 transition-colors"
                     title="Delete Record"
                   >
-                    <Trash2 size={20} />
+                    <Trash2 size={18} className="md:w-5 md:h-5" />
                   </button>
 
                   <button 
                     onClick={isEditingApplicant ? handleSaveEdit : handleStartEdit}
-                    className={`p-2 rounded-lg transition-colors font-bold text-sm ${isEditingApplicant ? 'bg-blue-500 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}
+                    className={`px-3 py-2 md:p-2 rounded-lg transition-colors font-bold text-xs md:text-sm ${isEditingApplicant ? 'bg-blue-500 text-white' : 'text-gray-400 hover:bg-white/10 hover:text-white'}`}
                   >
                     {isEditingApplicant ? 'Save' : 'Edit'}
                   </button>
@@ -787,7 +851,7 @@ export default function AdminDashboard() {
                     onClick={() => { setSelectedApplicant(null); setIsEditingApplicant(false); }}
                     className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
                   >
-                    <XCircle size={24} />
+                    <XCircle size={20} className="md:w-6 md:h-6" />
                   </button>
                 </div>
               </div>
@@ -927,9 +991,14 @@ export default function AdminDashboard() {
                         <CalendarDays size={16} className="text-purple-400 mt-0.5" />
                         <div>
                           <div className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Interview Scheduled</div>
-                          <div className="text-sm text-white">
+                          <div className="text-sm text-white mb-1">
                             {new Date(selectedApplicant.interviewDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                           </div>
+                          {selectedApplicant.interviewLocation && (
+                            <div className="text-xs text-purple-300">
+                              <span className="font-bold opacity-75">{selectedApplicant.interviewLocationType === 'virtual' ? 'URL:' : 'Loc:'}</span> {selectedApplicant.interviewLocation}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1041,6 +1110,30 @@ export default function AdminDashboard() {
                     required
                     value={interviewTime}
                     onChange={(e) => setInterviewTime(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mode</label>
+                  <select
+                    value={interviewLocationType}
+                    onChange={(e) => setInterviewLocationType(e.target.value as 'offline' | 'virtual')}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-purple-500/50 appearance-none"
+                  >
+                    <option value="virtual">Virtual (Online)</option>
+                    <option value="offline">Offline (In-person)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    {interviewLocationType === 'virtual' ? 'Meeting URL' : 'Physical Location'}
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder={interviewLocationType === 'virtual' ? 'https://meet.google.com/...' : 'Room 101, Core Block...'}
+                    value={interviewLocation}
+                    onChange={(e) => setInterviewLocation(e.target.value)}
                     className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-purple-500/50"
                   />
                 </div>

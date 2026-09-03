@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ArrowUpRight, Zap, ShieldCheck } from "lucide-react";
@@ -18,7 +18,7 @@ const PROJECTS = [
     year: "2023",
     tagline: "No more circling. Every spot, tracked.",
     desc: "Geomagnetic sensors under every slot. ANPR cameras at every gate. A real-time dashboard that tells you where to park — before you even enter campus.",
-    funding: "₹18L",
+    funding: "₹8L",
     impact: "3,000+",
     impactLabel: "daily users",
     stack: ["React", "Node.js", "Python", "MQTT"],
@@ -34,7 +34,7 @@ const PROJECTS = [
     year: "2024",
     tagline: "Every entry. Every exit. Authorized.",
     desc: "Face-authenticated gates at every campus entry and exit. One integrated system — authorization, threat detection, access logs. Nobody walks in unless approved.",
-    funding: "₹12L",
+    funding: "₹2L",
     impact: "24×7",
     impactLabel: "coverage",
     stack: ["OpenCV", "TensorFlow", "PostgreSQL", "Next.js"],
@@ -47,6 +47,29 @@ const PROJECTS = [
 export default function OurScope() {
   const headerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
+  
+  const [showPopup, setShowPopup] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleCaseStudyClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowPopup(true);
+    
+    // Slight delay to ensure DOM is updated before animating
+    setTimeout(() => {
+      gsap.fromTo(overlayRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" });
+      gsap.fromTo(popupRef.current, 
+        { scale: 0.8, opacity: 0, y: 40 }, 
+        { scale: 1, opacity: 1, y: 0, duration: 0.6, ease: "back.out(1.5)", delay: 0.1 }
+      );
+    }, 10);
+  };
+
+  const closePopup = () => {
+    gsap.to(popupRef.current, { scale: 0.8, opacity: 0, y: 40, duration: 0.3, ease: "power2.in" });
+    gsap.to(overlayRef.current, { opacity: 0, duration: 0.3, ease: "power2.in", delay: 0.1, onComplete: () => setShowPopup(false) });
+  };
 
   useEffect(() => {
     if (!pinRef.current) return;
@@ -215,7 +238,7 @@ export default function OurScope() {
                         {t}
                       </span>
                     ))}
-                    <a href="#" className="group ml-auto inline-flex items-center gap-3 cursor-pointer pl-4">
+                    <a href="#" onClick={handleCaseStudyClick} className="group ml-auto inline-flex items-center gap-3 cursor-pointer pl-4">
                       <span className="font-body text-sm font-semibold text-white/70 group-hover:text-white transition-colors duration-300">
                         View Case Study
                       </span>
@@ -246,6 +269,54 @@ export default function OurScope() {
 
       {/* ── BOTTOM TRANSITION ── */}
       <div className="h-40 bg-gradient-to-b from-[#07090b] to-surface relative z-10" />
+
+      {/* ── CASE STUDY POPUP ── */}
+      {showPopup && (
+        <div 
+          ref={overlayRef}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 opacity-0"
+          onClick={closePopup}
+        >
+          <div 
+            ref={popupRef}
+            className="bg-surface border border-black/10 rounded-3xl p-8 md:p-12 max-w-xl w-full shadow-[0_20px_80px_rgba(0,0,0,0.2)] relative text-center opacity-0 scale-90"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={closePopup}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors text-black"
+            >
+              ✕
+            </button>
+            
+            <div className="mb-6 mx-auto flex w-16 h-16 rounded-full bg-secondary/10 items-center justify-center">
+              <Zap className="text-secondary" size={32} />
+            </div>
+            
+            <h3 className="font-hero font-bold text-absolute-black text-3xl md:text-5xl mb-4 leading-tight">
+              Oops!
+            </h3>
+            
+            <p className="font-body text-black/70 text-lg md:text-xl mb-8 leading-relaxed">
+              To know about this, learn, & apply your brains, you need to apply in Vektor.<br/>
+              <span className="text-deep-forest font-semibold block mt-4 text-2xl font-script">Join the Vektor team!</span>
+            </p>
+            
+            <button 
+              onClick={(e) => {
+                e.preventDefault();
+                closePopup();
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('open-onboarding'));
+                }, 300);
+              }}
+              className="inline-flex items-center justify-center px-8 py-4 rounded-full bg-black text-white font-body font-bold text-sm tracking-wide uppercase hover:scale-105 transition-transform"
+            >
+              Apply Now
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

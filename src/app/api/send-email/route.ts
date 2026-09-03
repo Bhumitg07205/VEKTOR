@@ -63,7 +63,7 @@ const generateTemplate = (title: string, subtitle: string, accentColor: string, 
 
 export async function POST(req: Request) {
   try {
-    const { to, applicantName, status, interviewDate, customNote } = await req.json();
+    const { to, applicantName, status, interviewDate, interviewLocationType, interviewLocation, customNote } = await req.json();
 
     if (!to) {
       return NextResponse.json({ error: 'Recipient email is required' }, { status: 400 });
@@ -117,22 +117,37 @@ export async function POST(req: Request) {
       htmlContent = generateTemplate('VEKTOR - Accepted', 'Final Decision', colors.success, innerHtml);
 
     } else if (status === 'Interview') {
-      const formattedDate = interviewDate ? new Date(interviewDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' }) : 'To be assigned';
-      subject = `ACTION REQUIRED: Interview Scheduled`;
-      const innerHtml = `
-        <h2 style="font-size: 24px; margin-bottom: 24px; color: #ffffff; font-weight: 500; letter-spacing: -0.5px;">Next Stage Unlocked, <span style="color: ${colors.accent};">${applicantName}</span>.</h2>
-        <p style="margin-bottom: 24px; line-height: 1.7;">Your application has progressed to the interactive evaluation phase. We need to verify your capabilities in real-time.</p>
+        const formattedDate = interviewDate ? new Date(interviewDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' }) : 'To be assigned';
         
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 32px 0;">
-          <tr>
-            <td style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-left: 4px solid ${colors.accent}; padding: 24px; border-radius: 8px;">
-              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.accent}; font-weight: 700; margin-bottom: 8px;">Temporal Coordinates</div>
-              <div style="font-size: 18px; font-weight: 600; color: #ffffff; letter-spacing: 0.5px;">${formattedDate}</div>
-            </td>
-          </tr>
-        </table>
+        let locHtml = '';
+        if (interviewLocation) {
+          const locLabel = interviewLocationType === 'virtual' ? 'Meeting URL' : 'Physical Location';
+          locHtml = `
+            <tr>
+              <td style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-left: 4px solid ${colors.accent}; padding: 24px; border-radius: 8px; border-top: none; margin-top: 8px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.accent}; font-weight: 700; margin-bottom: 8px;">${locLabel}</div>
+                <div style="font-size: 16px; font-weight: 500; color: #e5e5e5; letter-spacing: 0.5px;">${interviewLocation}</div>
+              </td>
+            </tr>
+          `;
+        }
 
-        <p style="margin-bottom: 24px; line-height: 1.7;">Ensure your neural links, visual sensors, and audio inputs are calibrated and functioning optimally.</p>
+        subject = `ACTION REQUIRED: Interview Scheduled`;
+        const innerHtml = `
+          <h2 style="font-size: 24px; margin-bottom: 24px; color: #ffffff; font-weight: 500; letter-spacing: -0.5px;">Next Stage Unlocked, <span style="color: ${colors.accent};">${applicantName}</span>.</h2>
+          <p style="margin-bottom: 24px; line-height: 1.7;">Your application has progressed to the interactive evaluation phase. We need to verify your capabilities in real-time.</p>
+          
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 32px 0; border-collapse: separate; border-spacing: 0 8px;">
+            <tr>
+              <td style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2); border-left: 4px solid ${colors.accent}; padding: 24px; border-radius: 8px;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: ${colors.accent}; font-weight: 700; margin-bottom: 8px;">Temporal Coordinates</div>
+                <div style="font-size: 18px; font-weight: 600; color: #ffffff; letter-spacing: 0.5px;">${formattedDate}</div>
+              </td>
+            </tr>
+            ${locHtml}
+          </table>
+  
+          <p style="margin-bottom: 24px; line-height: 1.7;">Ensure your neural links, visual sensors, and audio inputs are calibrated and functioning optimally.</p>
         
         ${customNote ? `
         <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); padding: 24px; border-radius: 8px; margin: 32px 0;">

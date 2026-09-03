@@ -29,6 +29,8 @@ export interface Applicant {
   status: ApplicationStatus;
   appliedDate: string;
   interviewDate?: string;
+  interviewLocationType?: 'offline' | 'virtual';
+  interviewLocation?: string;
   resumeUrl?: string;
   isPriority?: boolean;
   evaluationRequest?: string;

@@ -121,21 +121,15 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
     }
   }, [initialEmail]);
 
-  // Check if applicant already exists when modal opens or email is present
-  useEffect(() => {
-    if (isOpen) {
-      fetchStats();
-      const emailToCheck = (initialEmail || emailValue || "").trim().toLowerCase();
-      if (emailToCheck && emailToCheck.includes("@")) {
-        checkAndHydrateUser(emailToCheck);
-      }
-    } else {
-      // Reset flip when modal completely closes
-      setIsFlipped(false);
-      setShowShareModal(false);
-      setEvalState('idle');
+  const getAnimalForUser = (identifier: string): "rhino" | "goldfish" | "angelfish" => {
+    if (!identifier) return "rhino";
+    let hash = 0;
+    for (let i = 0; i < identifier.length; i++) {
+      hash = identifier.charCodeAt(i) + ((hash << 5) - hash);
     }
-  }, [isOpen, initialEmail]);
+    const animals: ("rhino" | "goldfish" | "angelfish")[] = ["rhino", "goldfish", "angelfish"];
+    return animals[Math.abs(hash) % animals.length];
+  };
 
   const checkAndHydrateUser = async (email: string) => {
     setIsCheckingExisting(true);
@@ -168,15 +162,23 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
     }
   };
 
-  const getAnimalForUser = (identifier: string): "rhino" | "goldfish" | "angelfish" => {
-    if (!identifier) return "rhino";
-    let hash = 0;
-    for (let i = 0; i < identifier.length; i++) {
-      hash = identifier.charCodeAt(i) + ((hash << 5) - hash);
+  // Check if applicant already exists when modal opens or email is present
+  useEffect(() => {
+    if (isOpen) {
+      fetchStats();
+      const emailToCheck = (initialEmail || emailValue || "").trim().toLowerCase();
+      if (emailToCheck && emailToCheck.includes("@")) {
+        checkAndHydrateUser(emailToCheck);
+      }
+    } else {
+      // Reset flip when modal completely closes
+      setIsFlipped(false);
+      setShowShareModal(false);
+      setEvalState('idle');
     }
-    const animals: ("rhino" | "goldfish" | "angelfish")[] = ["rhino", "goldfish", "angelfish"];
-    return animals[Math.abs(hash) % animals.length];
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialEmail]);
+
 
   const handleEmailBlur = () => {
     const clean = emailValue.trim().toLowerCase();
@@ -500,7 +502,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
                 <button onClick={onClose} className="text-[#717974] hover:text-[#1A1C1C] transition-colors ml-2 md:ml-4 text-sm font-bold">✕</button>
               </div>
 
-              <p className="font-body text-[#717974] mb-2 uppercase tracking-widest text-xs font-bold">
+              <p className="font-body text-[#717974] mb-2 mt-8 md:mt-10 uppercase tracking-widest text-xs font-bold w-full max-w-[70%] mx-auto">
                 Status: <span className="text-secondary">{formData.status}</span>, {formData.name}
               </p>
 
@@ -532,6 +534,17 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
                   <p className="font-body text-base text-[#414944] mb-6 uppercase tracking-wider font-semibold">Pioneers Ahead</p>
                 </>
               )}
+
+              {/* STYLISH SPAM NOTE */}
+              <div className="mt-2 mb-6 px-4 py-3 bg-[#1A1C1C]/5 border border-[#1A1C1C]/10 rounded-2xl w-full flex items-start gap-3 text-left shadow-sm">
+                <span className="text-lg opacity-80 mt-0.5">📨</span>
+                <div>
+                  <p className="font-body text-xs font-bold text-[#1A1C1C] uppercase tracking-wider mb-0.5">Check your inbox</p>
+                  <p className="font-body text-[11px] text-[#717974] leading-relaxed">
+                    We&apos;ve dispatched your confirmation. If you don&apos;t see it, peek into your <span className="font-bold text-[#1A1C1C]">Spam</span> folder—sometimes exclusivity gets filtered by default.
+                  </p>
+                </div>
+              </div>
 
               {formData.status !== 'Accepted' && (
                 <div className="flex flex-col items-center w-full max-w-sm mt-4 p-6 border border-[#E9E8E7] rounded-3xl bg-white shadow-sm transition-all duration-300">
