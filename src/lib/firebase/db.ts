@@ -34,6 +34,8 @@ export interface Applicant {
   isPriority?: boolean;
   evaluationRequest?: string;
   queueNumber?: number;
+  emailHash?: string;
+  regNoHash?: string;
 }
 
 const APPLICANTS_COLLECTION = 'applicants';
@@ -57,45 +59,68 @@ export const getApplicants = async (): Promise<Applicant[]> => {
   }
 };
 
-export const findApplicantByEmail = async (email: string): Promise<Applicant | null> => {
-  if (!email || !email.trim()) return null;
-  const cleanEmail = email.trim().toLowerCase();
-  
+export const generateHash = (str: string): string => {
+  if (!str) return '';
+  const s = str.trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    const char = s.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+};
+
+export const findExistingApplicant = async (email?: string, regNo?: string): Promise<Applicant | null> => {
   try {
-    // First try exact lowercase match
-    const q = query(
-      collection(db, APPLICANTS_COLLECTION), 
-      where('email', '==', cleanEmail),
-      limit(1)
-    );
-    const snapshot = await getDocs(q);
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const cleanRegNo = regNo ? regNo.trim().toLowerCase() : '';
     
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      return { id: doc.id, ...doc.data() } as Applicant;
+    if (!cleanEmail && !cleanRegNo) return null;
+
+    const emailHash = cleanEmail ? generateHash(cleanEmail) : '';
+    const regNoHash = cleanRegNo ? generateHash(cleanRegNo) : '';
+
+    const queries = [];
+    
+    if (emailHash) {
+      queries.push(getDocs(query(collection(db, APPLICANTS_COLLECTION), where('emailHash', '==', emailHash), limit(1))));
+    } else if (cleanEmail) {
+      queries.push(getDocs(query(collection(db, APPLICANTS_COLLECTION), where('email', '==', cleanEmail), limit(1))));
     }
 
-    // Secondary scan to check case-insensitive match if needed
-    const allSnapshot = await getDocs(collection(db, APPLICANTS_COLLECTION));
-    for (const d of allSnapshot.docs) {
-      const data = d.data();
-      if (data.email && data.email.trim().toLowerCase() === cleanEmail) {
-        return { id: d.id, ...data } as Applicant;
+    if (regNoHash) {
+      queries.push(getDocs(query(collection(db, APPLICANTS_COLLECTION), where('regNoHash', '==', regNoHash), limit(1))));
+    } else if (cleanRegNo) {
+      queries.push(getDocs(query(collection(db, APPLICANTS_COLLECTION), where('regNo', '==', cleanRegNo), limit(1))));
+    }
+    
+    const snapshots = await Promise.all(queries);
+    
+    for (const snap of snapshots) {
+      if (!snap.empty) {
+        const doc = snap.docs[0];
+        return { id: doc.id, ...doc.data() } as Applicant;
       }
     }
     
     return null;
   } catch (err) {
-    console.error("Error finding applicant by email:", err);
+    console.error("Error finding existing applicant:", err);
     return null;
   }
 };
 
 export const addApplicant = async (data: Omit<Applicant, 'id'>): Promise<string> => {
-  // Ensure email is stored in clean lowercase for reliable lookup
+  const cleanEmail = data.email ? data.email.trim().toLowerCase() : '';
+  const cleanRegNo = data.regNo ? data.regNo.trim().toLowerCase() : '';
+  
   const cleanData = {
     ...data,
-    email: data.email ? data.email.trim().toLowerCase() : ''
+    email: cleanEmail,
+    regNo: cleanRegNo,
+    emailHash: cleanEmail ? generateHash(cleanEmail) : '',
+    regNoHash: cleanRegNo ? generateHash(cleanRegNo) : '',
   };
   const docRef = await addDoc(collection(db, APPLICANTS_COLLECTION), cleanData);
   return docRef.id;

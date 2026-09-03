@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Canvas } from "@react-three/fiber";
 import { useGLTF, useAnimations, OrbitControls, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
-import { addApplicant, updateApplicant, findApplicantByEmail, uploadResumeFile, getQueueStats } from "@/lib/firebase/db";
+import { addApplicant, updateApplicant, findExistingApplicant, uploadResumeFile, getQueueStats } from "@/lib/firebase/db";
 
 // 3D Model Component
 function AnimalModel({ animal, userName, isCard = false }: { animal: string, userName: string, isCard?: boolean }) {
@@ -131,10 +131,10 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
     return animals[Math.abs(hash) % animals.length];
   };
 
-  const checkAndHydrateUser = async (email: string) => {
+  const checkAndHydrateUser = async (email: string, regNo?: string) => {
     setIsCheckingExisting(true);
     try {
-      const existing = await findApplicantByEmail(email);
+      const existing = await findExistingApplicant(email, regNo);
       if (existing) {
         setFormData({
           name: existing.name || "",
@@ -183,7 +183,15 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
   const handleEmailBlur = () => {
     const clean = emailValue.trim().toLowerCase();
     if (clean && clean.includes("@")) {
-      checkAndHydrateUser(clean);
+      checkAndHydrateUser(clean, formData.regNo);
+    }
+  };
+
+  const handleRegNoBlur = () => {
+    const cleanRegNo = formData.regNo.trim().toLowerCase();
+    const cleanEmail = emailValue.trim().toLowerCase();
+    if (cleanRegNo || (cleanEmail && cleanEmail.includes("@"))) {
+      checkAndHydrateUser(cleanEmail, cleanRegNo);
     }
   };
 
@@ -191,9 +199,10 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
     e.preventDefault();
     setIsSubmitting(true);
     const effectiveEmail = (emailValue || initialEmail || "").trim().toLowerCase();
+    const effectiveRegNo = formData.regNo.trim().toLowerCase();
 
     // Double check if existing record exists
-    const existing = await findApplicantByEmail(effectiveEmail);
+    const existing = await findExistingApplicant(effectiveEmail, effectiveRegNo);
     if (existing) {
       setFormData({
         name: existing.name || "",
@@ -389,6 +398,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
                     required
                     value={formData.regNo}
                     onChange={(e) => setFormData({ ...formData, regNo: e.target.value })}
+                    onBlur={handleRegNoBlur}
                     className="w-full bg-transparent border-b border-white/20 py-3 text-white font-body placeholder:text-gray-600 focus:outline-none focus:border-white transition-colors"
                   />
                   <div className="grid grid-cols-2 gap-4">
