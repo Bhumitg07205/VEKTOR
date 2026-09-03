@@ -319,9 +319,10 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
         >
           {/* FRONT: FORM */}
           <div
-            className="absolute inset-0 bg-[#0a0a0a] border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row backface-hidden"
-            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", pointerEvents: isFlipped ? "none" : "auto" }}
+            className="absolute inset-0 rounded-[2rem] shadow-2xl"
+            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(0deg)", pointerEvents: isFlipped ? "none" : "auto" }}
           >
+            <div className="absolute inset-0 bg-[#0a0a0a] border border-white/10 rounded-[2rem] overflow-hidden flex flex-col md:flex-row">
             <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-50 transition-colors">✕</button>
 
             <div className="w-full md:w-3/5 p-6 md:p-20 flex flex-col justify-center items-center border-b md:border-b-0 md:border-r border-white/5 bg-[#0a0a0a] relative overflow-hidden text-center shrink-0">
@@ -454,13 +455,15 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
                 </form>
               )}
             </div>
+            </div>
           </div>
 
           {/* BACK: SUCCESS */}
           <div
-            className="absolute inset-0 bg-[#FBFAF9] rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row backface-hidden"
+            className="absolute inset-0 rounded-[2rem] shadow-2xl"
             style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)", pointerEvents: isFlipped ? "auto" : "none" }}
           >
+            <div className="absolute inset-0 bg-[#FBFAF9] rounded-[2rem] overflow-hidden flex flex-col md:flex-row">
             {/* Dark Left Side for 3D Model */}
             <div className="w-full md:w-3/5 relative bg-[#131413] min-h-[40vh] md:min-h-0">
               <Canvas camera={{ position: [0, 0, 8], fov: 40 }} className="cursor-grab active:cursor-grabbing">
@@ -624,6 +627,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
                 )}
               </div>
               )}
+            </div>
             </div>
 
           </div>
