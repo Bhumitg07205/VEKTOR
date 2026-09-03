@@ -11,8 +11,7 @@ import {
   limit,
   getCountFromServer
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './config';
+import { db } from './config';
 
 // Applicant Type matches the one in page.tsx
 export type ApplicationStatus = 'Pending' | 'Reviewing' | 'Interview' | 'Accepted' | 'Rejected';
@@ -117,7 +116,6 @@ export const getQueueStats = async (): Promise<{ normalCount: number, priorityCo
     const qPriority = query(collection(db, APPLICANTS_COLLECTION), where('isPriority', '==', true));
     const prioritySnap = await getCountFromServer(qPriority);
     
-    const qNormal = query(collection(db, APPLICANTS_COLLECTION), where('isPriority', '==', false));
     // Also consider those where isPriority is undefined or not set
     // In firestore, if we just want normal, we can get total count and subtract priority
     const totalSnap = await getCountFromServer(collection(db, APPLICANTS_COLLECTION));
