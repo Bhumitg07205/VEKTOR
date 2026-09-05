@@ -13,7 +13,7 @@ const PROJECTS = [
   {
     id: "parking",
     num: "01",
-    title: ["Smart", "Parking"],
+    title: ["Smart Park", "Pilot"],
     category: "Hardware & IoT",
     year: "2023",
     tagline: "No more circling. Every spot, tracked.",
@@ -29,7 +29,7 @@ const PROJECTS = [
   {
     id: "security",
     num: "02",
-    title: ["Gate", "Security"],
+    title: ["Get-In", "Aathiti"],
     category: "Computer Vision",
     year: "2024",
     tagline: "Every entry. Every exit. Authorized.",

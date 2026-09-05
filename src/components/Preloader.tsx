@@ -10,14 +10,39 @@ export default function Preloader() {
     // Lock scrolling while loading
     document.body.style.overflow = "hidden";
     
-    // Simulate loading time (you can adjust this)
-    const timer = setTimeout(() => {
+    // We want a minimum loading time so the animation plays out nicely
+    const minLoadTime = new Promise<void>(resolve => setTimeout(resolve, 2000));
+    
+    // Promise that resolves when all hero images are loaded, or a fallback timeout is hit
+    const imagesLoad = new Promise<void>(resolve => {
+      let resolved = false;
+      const finish = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+      
+      import("@/lib/heroPreloader").then(({ heroPreloader }) => {
+        if (heroPreloader) {
+          heroPreloader.onLoad(finish);
+          heroPreloader.preload();
+        } else {
+          finish();
+        }
+      });
+      
+      // Fallback timeout just in case network is too slow
+      setTimeout(finish, 8000);
+    });
+
+    // Wait for both minimum time and images to load
+    Promise.all([minLoadTime, imagesLoad]).then(() => {
       setIsLoading(false);
       document.body.style.overflow = "unset";
-    }, 2000);
+    });
 
     return () => {
-      clearTimeout(timer);
       document.body.style.overflow = "unset";
     };
   }, []);

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
+import { heroPreloader, FRAME_COUNT } from "@/lib/heroPreloader";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -50,9 +51,7 @@ const SplitWord = ({
   </span>
 );
 
-const FRAME_COUNT = 240;
-const currentFrame = (index: number) => 
-  `/newhero-sequence/frame_${(index + 1).toString().padStart(4, '0')}.webp`;
+
 
 export default function HeroSection() {
   const containerRef = useRef<HTMLElement>(null);
@@ -66,15 +65,7 @@ export default function HeroSection() {
   const overlayRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Preload images
-  useEffect(() => {
-    // We only strictly need to preload the first few frames to show immediately, 
-    // the rest will be fetched as they scroll, or we can preload all if we want.
-    for (let i = 0; i < FRAME_COUNT; i++) {
-      const img = new Image();
-      img.src = currentFrame(i);
-    }
-  }, []);
+
 
   useGSAP(() => {
     const isMobile = window.innerWidth < 768;
@@ -84,21 +75,27 @@ export default function HeroSection() {
     const context = canvas?.getContext('2d');
     const images: HTMLImageElement[] = [];
 
-    if (canvas && context) {
-      // Load first frame immediately
-      const firstImg = new Image();
-      firstImg.src = currentFrame(0);
-      firstImg.onload = () => {
-        canvas.width = firstImg.width;
-        canvas.height = firstImg.height;
-        context.drawImage(firstImg, 0, 0);
-      };
+    if (canvas && context && heroPreloader) {
+      // Ensure we start preload if not already
+      heroPreloader.preload();
+      
+      const cachedImages = heroPreloader.images;
+      images.push(...cachedImages);
 
-      // Create image objects for all frames so we can draw them instantly on update
-      for (let i = 0; i < FRAME_COUNT; i++) {
-        const img = new Image();
-        img.src = currentFrame(i);
-        images.push(img);
+      // Draw first frame immediately if ready
+      const firstImg = cachedImages[0];
+      if (firstImg) {
+        const drawFirst = () => {
+          canvas.width = firstImg.naturalWidth || firstImg.width || window.innerWidth;
+          canvas.height = firstImg.naturalHeight || firstImg.height || window.innerHeight;
+          context.drawImage(firstImg, 0, 0);
+        };
+        
+        if (firstImg.complete && firstImg.naturalWidth) {
+          drawFirst();
+        } else {
+          firstImg.addEventListener('load', drawFirst);
+        }
       }
     }
 
