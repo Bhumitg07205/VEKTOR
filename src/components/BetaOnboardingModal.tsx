@@ -323,7 +323,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
         <motion.div
           animate={{ rotateY: isFlipped ? 180 : 0 }}
           transition={{ duration: 0.9, type: "spring", bounce: 0.12 }}
-          className="relative w-full h-full max-w-[1400px] max-h-[95vh] min-h-[600px]"
+          className="relative w-full h-full max-w-[1400px] max-h-[95vh] min-h-[400px] md:min-h-[600px]"
           style={{ transformStyle: "preserve-3d", WebkitTransformStyle: "preserve-3d" }}
         >
           {/* FRONT: FORM */}
@@ -331,10 +331,13 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
             className="absolute inset-0 rounded-[2rem] shadow-2xl"
             style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(0deg)", pointerEvents: isFlipped ? "none" : "auto" }}
           >
-            <div className="absolute inset-0 bg-[#0a0a0a] border border-white/10 rounded-[2rem] overflow-hidden flex flex-col md:flex-row">
-            <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-50 transition-colors">✕</button>
+            <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white z-[60] transition-colors bg-black/40 w-8 h-8 flex items-center justify-center rounded-full backdrop-blur-md md:bg-transparent md:backdrop-blur-none md:p-0 md:w-auto md:h-auto">✕</button>
+            <div 
+              className="absolute inset-0 bg-[#0a0a0a] border border-white/10 rounded-[2rem] overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row overscroll-contain"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
 
-            <div className="w-full md:w-3/5 p-6 md:p-20 flex flex-col justify-center items-center border-b md:border-b-0 md:border-r border-white/5 bg-[#0a0a0a] relative overflow-hidden text-center shrink-0">
+            <div className="w-full md:w-3/5 p-6 pt-16 md:p-20 flex flex-col justify-center items-center border-b md:border-b-0 md:border-r border-white/5 bg-[#0a0a0a] relative overflow-hidden text-center shrink-0 min-h-[40vh] md:min-h-0">
               <h2 className="font-hero text-5xl md:text-[5rem] text-white leading-[1.1] tracking-tight mb-2 md:mb-4 relative z-10">
                 Prove Your<br /><span className="text-gray-400">Authority.</span>
               </h2>
@@ -367,7 +370,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
               </div>
             </div>
 
-            <div className="w-full md:w-2/5 p-6 md:p-16 flex flex-col justify-start md:justify-center overflow-y-auto custom-scrollbar bg-black relative z-20">
+            <div className="w-full md:w-2/5 p-6 md:p-16 flex flex-col justify-start md:justify-center md:overflow-y-auto custom-scrollbar bg-black relative z-20">
               {isCheckingExisting ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mb-4"></div>
@@ -473,7 +476,10 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
             className="absolute inset-0 rounded-[2rem] shadow-2xl"
             style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)", pointerEvents: isFlipped ? "auto" : "none" }}
           >
-            <div className="absolute inset-0 bg-[#FBFAF9] rounded-[2rem] overflow-hidden flex flex-col md:flex-row">
+            <div 
+              className="absolute inset-0 bg-[#FBFAF9] rounded-[2rem] overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row overscroll-contain"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
             {/* Dark Left Side for 3D Model */}
             <div className="w-full md:w-3/5 relative bg-[#131413] min-h-[40vh] md:min-h-0">
               <Canvas camera={{ position: [0, 0, 8], fov: 40 }} className="cursor-grab active:cursor-grabbing">
@@ -506,7 +512,7 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
             </div>
 
             {/* Light Right Side for Details */}
-            <div className="w-full md:w-2/5 p-6 md:p-14 flex flex-col justify-start md:justify-center items-center text-center relative z-10 bg-[#FBFAF9] overflow-y-auto">
+            <div className="w-full md:w-2/5 p-6 md:p-14 flex flex-col justify-start md:justify-center items-center text-center relative z-10 bg-[#FBFAF9] md:overflow-y-auto">
               <div className="w-full flex justify-end gap-4 mb-6 md:absolute md:top-8 md:right-8 md:mb-0">
                 <button onClick={() => setShowShareModal(true)} className="flex items-center gap-2 text-[#717974] hover:text-[#1A1C1C] transition-colors font-body text-[10px] md:text-xs font-bold tracking-widest uppercase">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[14px] h-[14px] md:w-4 md:h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
