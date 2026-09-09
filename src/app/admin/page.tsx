@@ -155,6 +155,18 @@ export default function AdminDashboard() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<ApplicationStatus | 'All' | 'Priority'>('All');
+  const [filterYear, setFilterYear] = useState('All');
+  const [filterBranch, setFilterBranch] = useState('All');
+
+  const uniqueBranches = useMemo(() => {
+    const branches = new Set(applicants.map(a => a.branch).filter(Boolean));
+    return Array.from(branches).sort();
+  }, [applicants]);
+
+  const uniqueYears = useMemo(() => {
+    const years = new Set(applicants.map(a => String(a.year)).filter(Boolean));
+    return Array.from(years).sort();
+  }, [applicants]);
   
   // Modals & Sub-states
   const [selectedApplicant, setSelectedApplicant] = useState<Applicant | null>(null);
@@ -226,7 +238,10 @@ export default function AdminDashboard() {
         matchesStatus = app.status === filterStatus;
       }
       
-      return matchesSearch && matchesStatus;
+      const matchesYear = filterYear === 'All' || String(app.year) === filterYear;
+      const matchesBranch = filterBranch === 'All' || app.branch === filterBranch;
+      
+      return matchesSearch && matchesStatus && matchesYear && matchesBranch;
     }).sort((a, b) => {
       // Priority items always at top if not explicitly filtering by priority alone
       if (a.isPriority && !b.isPriority) return -1;
@@ -828,7 +843,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-0 pb-32 md:pb-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-0 pb-32 md:pb-8 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
           
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
@@ -899,47 +914,83 @@ export default function AdminDashboard() {
           {activeTab === 'applicants' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
               {/* Toolbar */}
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                  <input 
-                    type="text" 
-                    placeholder="Search by name or registration number..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/30 transition-all"
-                  />
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search by name or registration number..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/30 transition-all"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={fetchData}
+                      disabled={isRefreshing}
+                      className="flex-1 md:flex-none items-center justify-center flex gap-2 bg-[#111] hover:bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white transition-all disabled:opacity-50"
+                      title="Refresh Data"
+                    >
+                      <RefreshCw size={18} className={isRefreshing ? "animate-spin text-white" : "text-gray-400"} />
+                    </button>
+                    <button 
+                      onClick={() => setShowCreateApplicant(true)}
+                      className="flex-[2] md:flex-none bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                      <UserPlus size={18} /> Add Record
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 bg-[#111] border border-white/10 rounded-xl px-4 py-2">
-                  <Filter size={18} className="text-gray-500" />
-                  <select 
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value as any)}
-                    className="bg-transparent text-gray-300 focus:outline-none appearance-none cursor-pointer pr-4"
-                  >
-                    <option value="All">All Applications</option>
-                    <option value="Priority">Priority Queue ⭐️</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Reviewing">Reviewing</option>
-                    <option value="Interview">Interview</option>
-                    <option value="Accepted">Accepted</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
+
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2 md:gap-4 items-center">
+                  <div className="flex items-center gap-2 bg-[#111] border border-white/10 rounded-xl px-3 md:px-4 py-2 flex-1 md:flex-none min-w-[120px]">
+                    <Filter size={16} className="text-gray-500 hidden md:block" />
+                    <select 
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as any)}
+                      className="w-full bg-transparent text-gray-300 text-sm focus:outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Status</option>
+                      <option value="Priority">Priority ⭐️</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Reviewing">Reviewing</option>
+                      <option value="Interview">Interview</option>
+                      <option value="Accepted">Accepted</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-[#111] border border-white/10 rounded-xl px-3 md:px-4 py-2 flex-1 md:flex-none min-w-[120px]">
+                    <span className="text-gray-500 text-xs font-bold uppercase hidden md:block">Year</span>
+                    <select 
+                      value={filterYear}
+                      onChange={(e) => setFilterYear(e.target.value)}
+                      className="w-full bg-transparent text-gray-300 text-sm focus:outline-none appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Years</option>
+                      {uniqueYears.map(year => (
+                        <option key={year} value={year}>Year {year}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-[#111] border border-white/10 rounded-xl px-3 md:px-4 py-2 flex-1 md:flex-none min-w-[140px]">
+                    <span className="text-gray-500 text-xs font-bold uppercase hidden md:block">Branch</span>
+                    <select 
+                      value={filterBranch}
+                      onChange={(e) => setFilterBranch(e.target.value)}
+                      className="w-full bg-transparent text-gray-300 text-sm focus:outline-none appearance-none cursor-pointer truncate"
+                    >
+                      <option value="All">All Branches</option>
+                      {uniqueBranches.map(branch => (
+                        <option key={branch} value={branch}>{branch}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <button
-                  onClick={fetchData}
-                  disabled={isRefreshing}
-                  className="flex items-center gap-2 bg-[#111] hover:bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 text-white transition-all disabled:opacity-50"
-                  title="Refresh Data"
-                >
-                  <RefreshCw size={18} className={isRefreshing ? "animate-spin text-white" : "text-gray-400"} />
-                </button>
-                <button 
-                  onClick={() => setShowCreateApplicant(true)}
-                  className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <UserPlus size={18} /> Add Record
-                </button>
               </div>
 
               {/* Table / List */}
@@ -1541,9 +1592,9 @@ export default function AdminDashboard() {
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+              <div className="flex-1 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {/* Info Pane */}
-                <div className="w-full md:w-1/3 border-r border-white/10 p-6 overflow-y-auto bg-[#0a0a0a] custom-scrollbar flex flex-col gap-6">
+                <div className="w-full md:w-1/3 border-r border-white/10 p-6 md:overflow-y-auto bg-[#0a0a0a] custom-scrollbar flex flex-col gap-6">
                   
                   {/* Actions */}
                   <div className="flex flex-col gap-2">
@@ -1718,7 +1769,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* PDF Viewer Pane */}
-                <div className="w-full md:w-2/3 bg-[#111] p-6 flex flex-col relative">
+                <div className="w-full md:w-2/3 bg-[#111] p-6 flex flex-col relative min-h-[500px] md:min-h-0">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText size={16} /> Attached Resume (PDF)
@@ -1789,7 +1840,7 @@ export default function AdminDashboard() {
                 </button>
               </div>
               
-              <div className="flex-1 overflow-auto bg-black rounded-xl border border-white/10 p-6">
+              <div className="flex-1 overflow-y-auto bg-black rounded-xl border border-white/10 p-6 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {emailTemplate === 'warning' ? (
                   <>
                     <h2 style={{ fontSize: '24px', marginBottom: '24px', color: '#ffffff', fontWeight: 500, letterSpacing: '-0.5px' }}>Action Required, [Applicant Name].</h2>
@@ -2106,7 +2157,8 @@ export default function AdminDashboard() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#111] border border-white/10 p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="bg-[#111] border border-white/10 p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar overscroll-contain"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               <h3 className="text-xl font-bold text-white mb-2 font-hero">Manually Add Applicant</h3>
               <p className="text-sm text-gray-400 mb-6">Bypass the main form and inject a record directly.</p>
