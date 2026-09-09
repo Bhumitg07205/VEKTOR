@@ -33,7 +33,7 @@ const PROJECTS = [
     category: "Computer Vision",
     year: "2024",
     tagline: "Every entry. Every exit. Authorized.",
-    desc: "Face-authenticated gates at every campus entry and exit. One integrated system — authorization, threat detection, access logs. Nobody walks in unless approved.",
+    desc: "Face-authenticated gates at every campus entry and exit. One integrated system — authorization, threat detection, access logs. Nobody walks in unless approved. Deployed all 4 gates, Thapar University",
     funding: "₹2L+",
     impact: "24×7",
     impactLabel: "coverage",
