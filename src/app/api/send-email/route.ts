@@ -61,6 +61,20 @@ const generateTemplate = (title: string, subtitle: string, accentColor: string, 
 </html>
 `;
 
+function formatInterviewDateForEmail(interviewDate?: string): string {
+  if (!interviewDate) return 'To be assigned';
+  const utcStr = interviewDate.endsWith('Z') ? interviewDate : (interviewDate.includes('T') ? interviewDate + 'Z' : interviewDate);
+  try {
+    return new Date(utcStr).toLocaleString('en-US', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'UTC'
+    });
+  } catch {
+    return interviewDate;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { to, applicantName, status, interviewDate, interviewLocationType, interviewLocation, customNote } = await req.json();
@@ -117,7 +131,7 @@ export async function POST(req: Request) {
       htmlContent = generateTemplate('VEKTOR - Accepted', 'Final Decision', colors.success, innerHtml);
 
     } else if (status === 'Interview') {
-        const formattedDate = interviewDate ? new Date(interviewDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' }) : 'To be assigned';
+        const formattedDate = formatInterviewDateForEmail(interviewDate);
         
         let locHtml = '';
         if (interviewLocation) {
@@ -158,7 +172,7 @@ export async function POST(req: Request) {
       htmlContent = generateTemplate('VEKTOR - Interview', 'Evaluation Phase', colors.accent, innerHtml);
 
     } else if (status === 'Interview Edited') {
-        const formattedDate = interviewDate ? new Date(interviewDate).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' }) : 'To be assigned';
+        const formattedDate = formatInterviewDateForEmail(interviewDate);
         
         let locHtml = '';
         if (interviewLocation) {

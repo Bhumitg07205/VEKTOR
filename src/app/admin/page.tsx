@@ -431,11 +431,32 @@ export default function AdminDashboard() {
     }
   };
 
+  const formatInterviewDateTime = (str?: string) => {
+    if (!str) return 'To be assigned';
+    const utcStr = str.endsWith('Z') ? str : (str.includes('T') ? str + 'Z' : str);
+    try {
+      return new Date(utcStr).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC'
+      });
+    } catch {
+      return str;
+    }
+  };
+
   const openInterviewModal = () => {
     if (selectedApplicant?.interviewDate) {
-      const dateObj = new Date(selectedApplicant.interviewDate);
-      setInterviewDate(dateObj.toISOString().split('T')[0]);
-      setInterviewTime(dateObj.toISOString().split('T')[1].substring(0, 5));
+      const raw = selectedApplicant.interviewDate;
+      const parts = raw.split('T');
+      if (parts.length === 2) {
+        setInterviewDate(parts[0]);
+        setInterviewTime(parts[1].substring(0, 5));
+      } else {
+        const dateObj = new Date(raw);
+        setInterviewDate(dateObj.toISOString().split('T')[0]);
+        setInterviewTime(dateObj.toISOString().split('T')[1].substring(0, 5));
+      }
       setInterviewLocationType((selectedApplicant.interviewLocationType as any) || 'virtual');
       setInterviewLocation(selectedApplicant.interviewLocation || '');
     } else {
@@ -1737,7 +1758,7 @@ export default function AdminDashboard() {
                         <div>
                           <div className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">Interview Scheduled</div>
                           <div className="text-sm text-white mb-1">
-                            {new Date(selectedApplicant.interviewDate).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                            {formatInterviewDateTime(selectedApplicant.interviewDate)}
                           </div>
                           {selectedApplicant.interviewLocation && (
                             <div className="text-xs text-purple-300">
