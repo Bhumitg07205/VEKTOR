@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Canvas } from "@react-three/fiber";
 import { useGLTF, useAnimations, OrbitControls, ContactShadows } from "@react-three/drei";
@@ -88,6 +88,10 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
   const [showShareModal, setShowShareModal] = useState(false);
   const [isCheckingExisting, setIsCheckingExisting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const cardCanvasContainerRef = useRef<HTMLDivElement>(null);
 
   const [emailValue, setEmailValue] = useState(initialEmail || "");
   const [formData, setFormData] = useState({
@@ -273,41 +277,238 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
 
   const isPriorityActive = evalState === 'sent';
 
-  const generateTradingCard = () => {
+  const generateCardCanvas = (): HTMLCanvasElement | null => {
     const canvas = document.createElement("canvas");
     canvas.width = 1080;
-    canvas.height = 1350;
+    canvas.height = 1440;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return null;
 
-    // Updated to match the dark premium theme
-    ctx.fillStyle = "#111111";
+    // 1. Dark Card Background with gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    bgGrad.addColorStop(0, "#1A1C1C");
+    bgGrad.addColorStop(0.4, "#121313");
+    bgGrad.addColorStop(1, "#0a0a0a");
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.font = "bold 80px sans-serif";
-    ctx.fillText(formData.name || "Pioneer", canvas.width / 2, 900);
+    // Subtle outer border
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(24, 24, canvas.width - 48, canvas.height - 48);
 
-    ctx.fillStyle = "#888888";
-    ctx.font = "30px sans-serif";
-    ctx.fillText("has applied to the most exclusive", canvas.width / 2, 1000);
-    ctx.fillText("engineering collective in the world.", canvas.width / 2, 1050);
+    // 2. Header
+    const isAccepted = formData.status === "Accepted";
+    const statusText = `CORE.${(formData.status || "PENDING").toUpperCase()}`;
+    const numberText = isAccepted
+      ? "#SELECTED"
+      : isPriorityActive
+      ? `#PRIORITY-${String(44 + queueStats.priorityCount).padStart(2, "0")}`
+      : `#${(107 + queueStats.normalCount).toLocaleString()}`;
 
-    ctx.font = "bold 30px monospace";
+    ctx.font = 'bold 26px "JetBrains Mono", monospace';
+    ctx.textBaseline = "top";
+
+    // Left status
     ctx.textAlign = "left";
-    ctx.fillStyle = "#666666";
-    ctx.fillText(isPriorityActive ? "CORE.PRIORITY_QUEUE" : "CORE.PENDING", 100, 120);
+    ctx.fillStyle = isAccepted ? "#4ade80" : isPriorityActive ? "#facc15" : "rgba(255, 255, 255, 0.7)";
+    ctx.fillText(statusText, 80, 80);
 
+    // Right queue number
     ctx.textAlign = "right";
-    ctx.fillStyle = isPriorityActive ? "#eab308" : "#22c55e";
-    ctx.fillText(isPriorityActive ? "#PRIORITY-01" : "#20600", canvas.width - 100, 120);
+    ctx.fillStyle = isAccepted ? "#4ade80" : isPriorityActive ? "#facc15" : "#22c55e";
+    ctx.fillText(numberText, canvas.width - 80, 80);
 
-    const dataUrl = canvas.toDataURL("image/webp", 0.9);
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `VEKTOR_Card_${formData.name || "Pioneer"}.webp`;
-    a.click();
+    // 3. Radial ambient glow behind 3D model
+    const glowGrad = ctx.createRadialGradient(canvas.width / 2, 530, 20, canvas.width / 2, 530, 360);
+    glowGrad.addColorStop(0, "rgba(255, 255, 255, 0.08)");
+    glowGrad.addColorStop(0.5, "rgba(34, 197, 94, 0.04)");
+    glowGrad.addColorStop(1, "transparent");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, 530, 360, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Draw 3D Model from WebGL Canvas (preserving aspect ratio)
+    const webglCanvas = (
+      cardCanvasContainerRef.current?.querySelector("canvas") ||
+      document.querySelector(".share-modal-canvas-container canvas") ||
+      Array.from(document.querySelectorAll("canvas")).pop()
+    ) as HTMLCanvasElement | null;
+
+    if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+      const srcW = webglCanvas.width;
+      const srcH = webglCanvas.height;
+      const aspect = srcW / srcH;
+      const maxDim = 680;
+      let drawW = maxDim;
+      let drawH = maxDim;
+      if (aspect > 1) {
+        drawH = maxDim / aspect;
+      } else {
+        drawW = maxDim * aspect;
+      }
+      const drawX = (canvas.width - drawW) / 2;
+      const drawY = 530 - drawH / 2;
+      ctx.drawImage(webglCanvas, drawX, drawY, drawW, drawH);
+    }
+
+    // 5. Name & Subtitle
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+
+    // Pioneer Name
+    ctx.fillStyle = "#ffffff";
+    ctx.font = 'bold 72px "Libre Caslon Text", Georgia, serif';
+    ctx.fillText(formData.name || "Pioneer", canvas.width / 2, 970);
+
+    // Subtitle
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = '500 28px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText("has applied to the most exclusive", canvas.width / 2, 1040);
+    ctx.fillText("engineering collective in the world.", canvas.width / 2, 1085);
+
+    // 6. Footer
+    // Left: VEKTOR brand
+    ctx.textAlign = "left";
+    ctx.font = 'bold 26px "Plus Jakarta Sans", sans-serif';
+    ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.fillText("VEKTOR", 80, 1340);
+
+    // Right: Status badge
+    const badgeLabel = `STATUS: ${(formData.status || "PENDING").toUpperCase()}`;
+    ctx.font = 'bold 22px "JetBrains Mono", monospace';
+    const textMetrics = ctx.measureText(badgeLabel);
+    const badgeWidth = textMetrics.width + 36;
+    const badgeHeight = 44;
+    const badgeX = canvas.width - 80 - badgeWidth;
+    const badgeY = 1310;
+
+    // Badge background & border
+    ctx.fillStyle = isAccepted
+      ? "rgba(74, 222, 128, 0.1)"
+      : isPriorityActive
+      ? "rgba(250, 204, 21, 0.1)"
+      : "rgba(255, 255, 255, 0.06)";
+    ctx.strokeStyle = isAccepted
+      ? "rgba(74, 222, 128, 0.3)"
+      : isPriorityActive
+      ? "rgba(250, 204, 21, 0.3)"
+      : "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = isAccepted ? "#4ade80" : isPriorityActive ? "#facc15" : "rgba(255, 255, 255, 0.7)";
+    ctx.fillText(badgeLabel, badgeX + badgeWidth / 2, badgeY + 29);
+
+    return canvas;
+  };
+
+  const handleDownload = () => {
+    setIsDownloading(true);
+    try {
+      const canvas = generateCardCanvas();
+      if (!canvas) return;
+
+      const dataUrl = canvas.toDataURL("image/png", 1.0);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      const sanitizedName = (formData.name || "Pioneer").trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+      a.download = `VEKTOR_Card_${sanitizedName}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Failed to download card:", err);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const shareUrl = typeof window !== "undefined" ? window.location.origin : "https://vektor.ac";
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      console.error("Failed to copy link to clipboard:", err);
+    }
+  };
+
+  const handleShare = async () => {
+    setIsSharing(true);
+    try {
+      const canvas = generateCardCanvas();
+      const shareUrl = typeof window !== "undefined" ? window.location.origin : "https://vektor.ac";
+      const shareTitle = `VEKTOR | ${formData.name || "Pioneer"} Card`;
+      const shareText = `${formData.name || "I"} just applied to VEKTOR — the elite engineering collective.`;
+
+      if (canvas) {
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/png", 1.0)
+        );
+
+        if (blob) {
+          const sanitizedName = (formData.name || "Pioneer").trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+          const file = new File([blob], `VEKTOR_Card_${sanitizedName}.png`, { type: "image/png" });
+
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                title: shareTitle,
+                text: shareText,
+                files: [file],
+              });
+              return;
+            } catch (err: any) {
+              if (err.name === "AbortError") return;
+              console.warn("Sharing with file failed, attempting share without file:", err);
+            }
+          }
+        }
+      }
+
+      // Try Web Share API without file
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl,
+          });
+          return;
+        } catch (err: any) {
+          if (err.name === "AbortError") return;
+          console.warn("Native share failed, falling back to copy and download:", err);
+        }
+      }
+
+      // Fallback: Copy link and download PNG card
+      await handleCopyLink();
+      handleDownload();
+    } catch (err) {
+      console.error("Failed to share card:", err);
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -677,8 +878,13 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
               <div className="flex-1 flex items-center justify-center z-10 my-4 relative w-full rounded-2xl overflow-hidden shadow-inner">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05)_0%,transparent_70%)] pointer-events-none"></div>
 
-                <div className="w-full h-full absolute inset-0">
-                  <Canvas camera={{ position: [0, 0, 5], fov: 45 }} className="cursor-grab active:cursor-grabbing">
+                <div ref={cardCanvasContainerRef} className="w-full h-full absolute inset-0 share-modal-canvas-container">
+                  <Canvas
+                    gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }}
+                    dpr={[2, 3]}
+                    camera={{ position: [0, 0, 5], fov: 45 }}
+                    className="cursor-grab active:cursor-grabbing"
+                  >
                     <ambientLight intensity={1.5} />
                     <directionalLight position={[10, 10, 5]} intensity={3} color="#ffffff" />
                     <AnimalModel animal={animal} userName={formData.name} isCard={true} />
@@ -704,19 +910,71 @@ export default function BetaOnboardingModal({ isOpen, onClose, initialEmail }: B
               </div>
             </div>
 
-            {/* BUTTONS */}
-            <div className="flex gap-3 mt-8 w-full px-2">
-              <button onClick={() => alert("Copied to clipboard!")} className="flex-1 bg-[#1A1C1C] hover:bg-black text-white border border-white/10 py-4 rounded-full font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg hover:border-white/30">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
-                Copy Link
+            {/* Close Button Top-Right */}
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="absolute -top-3 -right-3 md:-right-4 w-9 h-9 bg-[#1A1C1C] border border-white/20 hover:border-white/50 text-white rounded-full flex items-center justify-center transition-all shadow-xl z-30 cursor-pointer hover:scale-105 text-sm font-bold"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+
+            {/* ACTION BUTTONS */}
+            <div className="flex flex-col gap-2.5 mt-6 w-full px-2">
+              <button
+                onClick={handleShare}
+                disabled={isSharing}
+                className="w-full bg-[#22c55e] hover:bg-[#1ea751] text-black py-3.5 rounded-full font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-60"
+              >
+                {isSharing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                    <span>Preparing Share...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                    <span>Share Card</span>
+                  </>
+                )}
               </button>
-              <button onClick={generateTradingCard} className="flex-1 bg-white hover:bg-gray-200 text-black py-4 rounded-full font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Download
-              </button>
-              <button onClick={() => setShowShareModal(false)} className="w-[52px] h-[52px] bg-[#1A1C1C] border border-white/10 hover:border-white/30 text-white rounded-full flex items-center justify-center transition-all shadow-lg flex-shrink-0">
-                ✕
-              </button>
+
+              <div className="flex gap-2.5 w-full">
+                <button
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  className="flex-1 bg-white hover:bg-gray-200 text-black py-3 rounded-full font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-60"
+                >
+                  {isDownloading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      <span>Download PNG</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleCopyLink}
+                  className="flex-1 bg-[#1A1C1C] hover:bg-black text-white border border-white/10 hover:border-white/30 py-3 rounded-full font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span className="text-[#22c55e]">Link Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                      <span>Copy Link</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
