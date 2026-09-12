@@ -67,7 +67,9 @@ function PortraitCard({ member, idx, large = false }: { member: typeof FOUNDERS[
 
   return (
     <a
-      href={`mailto:${member.email}`}
+      href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(member.email)}`}
+      target="_blank"
+      rel="noopener noreferrer"
       ref={cardRef}
       className="group block cursor-pointer"
       style={{ perspective: "1000px" }}

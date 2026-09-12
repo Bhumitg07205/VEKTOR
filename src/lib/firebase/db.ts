@@ -271,3 +271,139 @@ export const deleteAuditLog = async (id: string): Promise<void> => {
   const docRef = doc(db, AUDIT_LOGS_COLLECTION, id);
   await deleteDoc(docRef);
 };
+
+// =====================
+// ASSIGNMENTS
+// =====================
+export interface Assignment {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  createdAt: string;
+  createdBy: string;
+  recipientType: 'all_members' | 'specific';
+  specificRecipients: string[];
+  ccAdmins: string[];
+  submissionLink?: string;
+  attachmentUrls?: { name: string; url: string }[];
+  remindersSent: number;
+  lastReminderAt?: string;
+  isActive: boolean;
+  isPriority?: boolean;
+  tags?: string[];
+}
+
+export interface AssignmentSubmission {
+  id: string;
+  assignmentId: string;
+  memberEmail: string;
+  memberName: string;
+  submittedAt: string;
+  submissionUrl?: string;
+  notes?: string;
+}
+
+const ASSIGNMENTS_COLLECTION = 'assignments';
+const SUBMISSIONS_COLLECTION = 'assignment_submissions';
+
+export const getAssignments = async (): Promise<Assignment[]> => {
+  try {
+    const q = query(collection(db, ASSIGNMENTS_COLLECTION), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Assignment));
+  } catch {
+    const snapshot = await getDocs(collection(db, ASSIGNMENTS_COLLECTION));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Assignment));
+  }
+};
+
+export const addAssignment = async (data: Omit<Assignment, 'id'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, ASSIGNMENTS_COLLECTION), data);
+  return docRef.id;
+};
+
+export const updateAssignment = async (id: string, data: Partial<Assignment>): Promise<void> => {
+  const docRef = doc(db, ASSIGNMENTS_COLLECTION, id);
+  await updateDoc(docRef, data);
+};
+
+export const removeAssignment = async (id: string): Promise<void> => {
+  const docRef = doc(db, ASSIGNMENTS_COLLECTION, id);
+  await deleteDoc(docRef);
+};
+
+export const getSubmissionsForAssignment = async (assignmentId: string): Promise<AssignmentSubmission[]> => {
+  try {
+    const q = query(collection(db, SUBMISSIONS_COLLECTION), where('assignmentId', '==', assignmentId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AssignmentSubmission));
+  } catch (err) {
+    console.error('Error fetching submissions:', err);
+    return [];
+  }
+};
+
+export const addSubmission = async (data: Omit<AssignmentSubmission, 'id'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, SUBMISSIONS_COLLECTION), data);
+  return docRef.id;
+};
+
+export const removeSubmission = async (id: string): Promise<void> => {
+  const docRef = doc(db, SUBMISSIONS_COLLECTION, id);
+  await deleteDoc(docRef);
+};
+
+// =====================
+// CLASS SESSIONS
+// =====================
+export interface ClassSession {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  duration: number; // in minutes
+  type: 'online' | 'offline';
+  meetLink?: string;
+  location?: string;
+  createdBy: string;
+  createdAt: string;
+  ccAdmins: string[];
+  recipientType: 'all_members' | 'specific';
+  specificRecipients: string[];
+  reminderSent: boolean;
+  isRecurring: boolean;
+  recurringPattern?: 'weekly' | 'biweekly' | 'monthly';
+  tags: string[];
+  isCancelled?: boolean;
+  cancelReason?: string;
+}
+
+const CLASS_SESSIONS_COLLECTION = 'class_sessions';
+
+export const getClassSessions = async (): Promise<ClassSession[]> => {
+  try {
+    const q = query(collection(db, CLASS_SESSIONS_COLLECTION), orderBy('date', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession));
+  } catch {
+    const snapshot = await getDocs(collection(db, CLASS_SESSIONS_COLLECTION));
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession));
+  }
+};
+
+export const addClassSession = async (data: Omit<ClassSession, 'id'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, CLASS_SESSIONS_COLLECTION), data);
+  return docRef.id;
+};
+
+export const updateClassSession = async (id: string, data: Partial<ClassSession>): Promise<void> => {
+  const docRef = doc(db, CLASS_SESSIONS_COLLECTION, id);
+  await updateDoc(docRef, data);
+};
+
+export const removeClassSession = async (id: string): Promise<void> => {
+  const docRef = doc(db, CLASS_SESSIONS_COLLECTION, id);
+  await deleteDoc(docRef);
+};

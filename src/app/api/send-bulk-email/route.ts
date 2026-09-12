@@ -62,7 +62,7 @@ const generateTemplate = (title: string, subtitle: string, accentColor: string, 
 
 export async function POST(req: Request) {
   try {
-    const { recipients, subject, messageText, templateType } = await req.json();
+    const { recipients, subject, messageText, templateType, attachments, ccEmails } = await req.json();
 
     if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
       return NextResponse.json({ error: 'Recipients array is required' }, { status: 400 });
@@ -79,6 +79,14 @@ export async function POST(req: Request) {
         pass: process.env.GMAIL_APP_PASSWORD || 'nusr wbbv pftt efsw'
       }
     });
+
+    const mailAttachments = Array.isArray(attachments) && attachments.length > 0
+      ? attachments.map((att: { filename: string; contentType?: string; content: string }) => ({
+          filename: att.filename,
+          content: Buffer.from(att.content.replace(/^data:.*?;base64,/, ''), 'base64'),
+          contentType: att.contentType || 'application/octet-stream'
+        }))
+      : undefined;
 
     const sendPromises = recipients.map(async (recipient: { email: string; name: string }) => {
       // Replace {{name}} with the applicant's real name in the body
@@ -130,6 +138,19 @@ export async function POST(req: Request) {
         innerHtml = personalizedText;
       }
 
+      if (mailAttachments && mailAttachments.length > 0) {
+        innerHtml += `
+          <div style="margin-top: 32px; padding: 18px 24px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;">
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #888888; font-weight: 700; margin-bottom: 10px;">
+              Attached Files (${mailAttachments.length})
+            </div>
+            <div style="font-size: 13px; color: #e5e5e5; line-height: 1.8;">
+              ${mailAttachments.map((a: any) => `&bull; ${a.filename}`).join('<br>')}
+            </div>
+          </div>
+        `;
+      }
+
       const formattedHtml = generateTemplate(
         subject,
         'Direct Communication',
@@ -138,10 +159,12 @@ export async function POST(req: Request) {
       );
 
       return transporter.sendMail({
-        from: `"VEKTOR Core" <${process.env.GMAIL_USER || 'bhumit07205@gmail.com'}>`,
+        from: `"VEKTOR Core" <${process.env.GMAIL_USER || 'vektorprojects07@gmail.com'}>`,
         to: recipient.email,
+        cc: Array.isArray(ccEmails) && ccEmails.length > 0 ? ccEmails.join(',') : undefined,
         subject: subject,
         html: formattedHtml,
+        attachments: mailAttachments,
       });
     });
 

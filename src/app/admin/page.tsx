@@ -1,12 +1,17 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, Calendar, CheckCircle, XCircle, Clock, Search, Filter, 
   ChevronRight, FileText, Download, UserCheck, LayoutDashboard, Settings,
   LogOut, Phone, CalendarDays, BookOpen, AlertCircle, Shield, Trash2, 
-  UserPlus, Mail, Star, Lock, ExternalLink, Send, RefreshCw
+  UserPlus, Mail, Star, Lock, ExternalLink, Send, RefreshCw,
+  Sparkles, Paperclip, Upload, X, Wand2, File, Check, Plus, Copy,
+  Video, MapPin, Tag, Bell, BellRing, ClipboardCheck, ClipboardList,
+  ChevronDown, ChevronUp, AlertTriangle, Repeat, Eye, EyeOff,
+  GraduationCap, Zap, BarChart3, Users2, Link, CheckSquare, Square,
+  Edit3, Pencil, FileUp
 } from 'lucide-react';
 import { auth } from '@/lib/firebase/config';
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -15,7 +20,10 @@ import { getAuth, createUserWithEmailAndPassword as secondaryCreateUser } from '
 import { 
   getApplicants, addApplicant, updateApplicant, removeApplicant, uploadResumeFile, Applicant, ApplicationStatus,
   getAdmins, addAdminToDB, removeAdminFromDB, AdminUser, updateAdminRole,
-  getAuditLogs, addAuditLog, AuditLog, clearAllAuditLogs, deleteAuditLog
+  getAuditLogs, addAuditLog, AuditLog, clearAllAuditLogs, deleteAuditLog,
+  getAssignments, addAssignment, updateAssignment, removeAssignment, Assignment,
+  getSubmissionsForAssignment, addSubmission, removeSubmission, AssignmentSubmission,
+  getClassSessions, addClassSession, updateClassSession, removeClassSession, ClassSession,
 } from '@/lib/firebase/db';
 
 const INITIAL_ADMINS: AdminUser[] = [];
@@ -106,7 +114,7 @@ export default function AdminDashboard() {
   const [currentUserEmail, setCurrentUserEmail] = useState('');
 
   // Main States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'applicants' | 'admins' | 'settings' | 'emails' | 'audit'>('applicants');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'applicants' | 'admins' | 'settings' | 'emails' | 'audit' | 'assignments' | 'schedule'>('applicants');
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [admins, setAdmins] = useState<AdminUser[]>(INITIAL_ADMINS);
@@ -121,10 +129,14 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setIsRefreshing(true);
     try {
-      const [appsData, adminsData, logsData] = await Promise.all([getApplicants(), getAdmins(), getAuditLogs()]);
+      const [appsData, adminsData, logsData, assignmentsData, sessionsData] = await Promise.all([
+        getApplicants(), getAdmins(), getAuditLogs(), getAssignments(), getClassSessions()
+      ]);
       setApplicants(appsData);
       setAdmins(adminsData);
       setAuditLogs(logsData);
+      setAssignments(assignmentsData);
+      setClassSessions(sessionsData);
     } catch (error) {
       console.error("Error fetching data:", error);
       showToast("Error", "Could not connect to Firebase database.");
@@ -188,6 +200,23 @@ export default function AdminDashboard() {
   const [isSendingBulkEmail, setIsSendingBulkEmail] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   
+  // Gemini AI Email States
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiTone, setAiTone] = useState('VEKTOR Elite & Authoritative');
+  const [isGeneratingWithAi, setIsGeneratingWithAi] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
+
+  // File Attachments State
+  const [emailAttachments, setEmailAttachments] = useState<Array<{
+    id: string;
+    file: File;
+    name: string;
+    size: number;
+    type: string;
+    base64?: string;
+  }>>([]);
+  const [isAttachmentDragging, setIsAttachmentDragging] = useState(false);
+  
   // Create / Admin modals
   const [showCreateApplicant, setShowCreateApplicant] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
@@ -201,6 +230,117 @@ export default function AdminDashboard() {
 
   // Auto-Email Toggle
   const [autoEmailEnabled, setAutoEmailEnabled] = useState(true);
+
+  // ─── CC Admin State (Comms Studio) ───────────────────────────────────────
+  const [commsCcAdmins, setCommsCcAdmins] = useState<string[]>([]);
+  const [showCcDropdown, setShowCcDropdown] = useState(false);
+
+  // ─── Assignments State ───────────────────────────────────────────────────
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState<AssignmentSubmission[]>([]);
+  const [showCreateAssignment, setShowCreateAssignment] = useState(false);
+  const [isSendingAssignmentEmail, setIsSendingAssignmentEmail] = useState(false);
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [assignmentForm, setAssignmentForm] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    submissionLink: '',
+    recipientType: 'all_members' as 'all_members' | 'specific',
+    specificRecipients: [] as string[],
+    ccAdmins: [] as string[],
+    tags: [] as string[],
+    isPriority: false,
+    attachmentUrls: [] as { name: string; url: string }[],
+  });
+  const [assignmentTagInput, setAssignmentTagInput] = useState('');
+  const [assignmentSpecificInput, setAssignmentSpecificInput] = useState('');
+  const [assignmentRecipientFilter, setAssignmentRecipientFilter] = useState('');
+  const [assignmentCcInput, setAssignmentCcInput] = useState('');
+  const [showAssignmentCcDropdown, setShowAssignmentCcDropdown] = useState(false);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
+  const [isUploadingAssignmentFile, setIsUploadingAssignmentFile] = useState(false);
+
+  // Assignment Edit State
+  const [showEditAssignment, setShowEditAssignment] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [editAssignmentForm, setEditAssignmentForm] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    submissionLink: '',
+    recipientType: 'all_members' as 'all_members' | 'specific',
+    specificRecipients: [] as string[],
+    ccAdmins: [] as string[],
+    tags: [] as string[],
+    isPriority: false,
+    attachmentUrls: [] as { name: string; url: string }[],
+  });
+  const [editAssignmentTagInput, setEditAssignmentTagInput] = useState('');
+  const [editAssignmentSpecificInput, setEditAssignmentSpecificInput] = useState('');
+  const [showEditAssignmentCcDropdown, setShowEditAssignmentCcDropdown] = useState(false);
+  const [editAssignmentNotify, setEditAssignmentNotify] = useState(true);
+  const [isSavingAssignmentEdit, setIsSavingAssignmentEdit] = useState(false);
+
+  // ─── Class Sessions State ────────────────────────────────────────────────
+  const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
+  const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
+  const [showCreateSession, setShowCreateSession] = useState(false);
+  const [isSendingClassEmail, setIsSendingClassEmail] = useState(false);
+  const [sessionForm, setSessionForm] = useState({
+    title: '',
+    description: '',
+    date: '',
+    time: '',
+    duration: 60,
+    type: 'online' as 'online' | 'offline',
+    meetLink: '',
+    location: '',
+    recipientType: 'all_members' as 'all_members' | 'specific',
+    specificRecipients: [] as string[],
+    ccAdmins: [] as string[],
+    isRecurring: false,
+    recurringPattern: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
+    tags: [] as string[],
+  });
+  const [sessionTagInput, setSessionTagInput] = useState('');
+  const [sessionSpecificInput, setSessionSpecificInput] = useState('');
+  const [sessionRecipientFilter, setSessionRecipientFilter] = useState('');
+  const [sessionCcInput, setSessionCcInput] = useState('');
+  const [showSessionCcDropdown, setShowSessionCcDropdown] = useState(false);
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'all'>('upcoming');
+
+  // Session Edit & Cancellation State
+  const [showEditSession, setShowEditSession] = useState(false);
+  const [editingSession, setEditingSession] = useState<ClassSession | null>(null);
+  const [editSessionForm, setEditSessionForm] = useState({
+    title: '',
+    description: '',
+    date: '',
+    time: '',
+    duration: 60,
+    type: 'online' as 'online' | 'offline',
+    meetLink: '',
+    location: '',
+    recipientType: 'all_members' as 'all_members' | 'specific',
+    specificRecipients: [] as string[],
+    ccAdmins: [] as string[],
+    isRecurring: false,
+    recurringPattern: 'weekly' as 'weekly' | 'biweekly' | 'monthly',
+    tags: [] as string[],
+  });
+  const [editSessionTagInput, setEditSessionTagInput] = useState('');
+  const [editSessionSpecificInput, setEditSessionSpecificInput] = useState('');
+  const [showEditSessionCcDropdown, setShowEditSessionCcDropdown] = useState(false);
+  const [editSessionNotify, setEditSessionNotify] = useState(true);
+  const [isSavingSessionEdit, setIsSavingSessionEdit] = useState(false);
+
+  // Cancellation Modal State
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [sessionToCancel, setSessionToCancel] = useState<ClassSession | null>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState('');
+  const [isCancellingSession, setIsCancellingSession] = useState(false);
 
   // --- Auth Handlers ---
   const handleLogin = async (e: React.FormEvent) => {
@@ -340,6 +480,106 @@ export default function AdminDashboard() {
       showToast("Error", "Failed to update status.");
     }
   };
+  const AI_PROMPT_PRESETS = [
+    { label: "🚀 Acceptance & Next Steps", prompt: "Write an acceptance transmission congratulating the applicant for making the cut into VEKTOR. Inform them to prepare their systems for the core induction briefing.", tone: "VEKTOR Elite & Authoritative" },
+    { label: "⚡ Interview Coordinates", prompt: "Inform the applicant that their profile has cleared Phase 1 triage and they have unlocked the technical evaluation interview. Emphasize that live capability verification will take place.", tone: "VEKTOR Elite & Authoritative" },
+    { label: "⚠️ Missing Info / Urgent Repo", prompt: "Urgent action required: The applicant forgot to submit their project repository or demo URL. Give them a strict 24-hour window to reply or their queue slot will be voided.", tone: "Urgent & Direct" },
+    { label: "📢 Cohort Orientation", prompt: "Announce the upcoming VEKTOR cohort kickoff session at TAN Auditorium. State that attendance is strictly mandatory for all newly selected members.", tone: "Formal & Precise" },
+    { label: "💡 Constructive Iteration", prompt: "Inform the applicant that while their current submission was not selected due to extreme cohort constraints, their effort was recognized. Urge them to iterate and reapply in the next cycle.", tone: "Encouraging & Inspiring" },
+    { label: "⏱️ Task Submission Deadline", prompt: "Reminder that the 48-hour prototype challenge submission deadline expires tonight at 23:59 IST. Late commits will not be graded.", tone: "Urgent & Direct" },
+  ];
+
+  const handleAddAttachments = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const totalCurrentSize = emailAttachments.reduce((acc, curr) => acc + curr.size, 0);
+    const newFilesTotalSize = fileArray.reduce((acc, curr) => acc + curr.size, 0);
+
+    if (totalCurrentSize + newFilesTotalSize > 15 * 1024 * 1024) {
+      showToast("Size Limit Exceeded", "Total attachment payload cannot exceed 15MB.");
+      return;
+    }
+
+    try {
+      const processedFiles = await Promise.all(
+        fileArray.map(async (f) => {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(f);
+          });
+          return {
+            id: Math.random().toString(36).substring(2, 9),
+            file: f,
+            name: f.name,
+            size: f.size,
+            type: f.type || 'application/octet-stream',
+            base64,
+          };
+        })
+      );
+
+      setEmailAttachments(prev => [...prev, ...processedFiles]);
+      showToast("Files Attached", `Attached ${processedFiles.length} file(s).`);
+    } catch (err) {
+      console.error(err);
+      showToast("Attachment Error", "Failed to process attached file.");
+    }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setEmailAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
+  const handleGenerateAiEmail = async (mode: 'new' | 'polish' = 'new', customTextPrompt?: string) => {
+    const promptToUse = customTextPrompt !== undefined ? customTextPrompt : aiPrompt;
+    if (mode === 'new' && !promptToUse.trim()) {
+      showToast("Prompt Required", "Please describe what email you want Gemini to write.");
+      return;
+    }
+    if (mode === 'polish' && !emailBody.trim()) {
+      showToast("Nothing to Polish", "Please write or enter some transmission content first.");
+      return;
+    }
+
+    setIsGeneratingWithAi(true);
+    try {
+      const res = await fetch('/api/ai/generate-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: promptToUse,
+          tone: aiTone,
+          targetAudience: emailAudience,
+          currentSubject: emailSubject,
+          currentBody: emailBody,
+          mode
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate transmission with Gemini");
+      }
+
+      setEmailSubject(data.subject);
+      setEmailBody(data.body);
+      if (data.templateType) {
+        setEmailTemplate(data.templateType);
+      }
+      setAiExplanation(data.explanation || '');
+      showToast(
+        mode === 'polish' ? "Draft Polished" : "Transmission Synthesized",
+        "Generated with Gemini following the VEKTOR design system."
+      );
+    } catch (err: any) {
+      console.error(err);
+      showToast("AI Generation Failed", err.message || "Failed to communicate with Gemini API.");
+    } finally {
+      setIsGeneratingWithAi(false);
+    }
+  };
+
   const handleSendBulkEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!emailSubject || !emailBody) {
@@ -375,10 +615,16 @@ export default function AdminDashboard() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to send this email to ${targetRecipients.length} recipient(s)?`)) return;
+    if (!confirm(`Are you sure you want to send this email to ${targetRecipients.length} recipient(s)${emailAttachments.length > 0 ? ` with ${emailAttachments.length} attachment(s)` : ''}?`)) return;
 
     setIsSendingBulkEmail(true);
     try {
+      const payloadAttachments = emailAttachments.map(att => ({
+        filename: att.name,
+        contentType: att.type,
+        content: att.base64 || ''
+      }));
+
       const res = await fetch('/api/send-bulk-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -386,7 +632,9 @@ export default function AdminDashboard() {
           recipients: targetRecipients.map(a => ({ email: a.email, name: a.name })),
           subject: emailSubject,
           messageText: emailBody,
-          templateType: emailTemplate
+          templateType: emailTemplate,
+          attachments: payloadAttachments.length > 0 ? payloadAttachments : undefined,
+          ccEmails: commsCcAdmins.length > 0 ? commsCcAdmins : undefined,
         })
       });
 
@@ -395,11 +643,12 @@ export default function AdminDashboard() {
         addAuditLog({
           adminEmail: currentUserEmail || 'unknown',
           actionType: 'EMAIL_SENT',
-          details: `Sent bulk email (Template: ${emailTemplate}) with subject "${emailSubject}" to ${targetRecipients.length} recipients. Message: ${emailBody}`
+          details: `Sent bulk email (Template: ${emailTemplate}) with subject "${emailSubject}" to ${targetRecipients.length} recipients. Attachments: ${emailAttachments.length > 0 ? emailAttachments.map(a => a.name).join(', ') : 'None'}. Message: ${emailBody}`
         });
         showToast("Success", data.message || `Emails sent to ${targetRecipients.length} recipients.`);
         setEmailSubject('');
         setEmailBody('');
+        setEmailAttachments([]);
       } else {
         throw new Error(data.error || 'Failed to send emails');
       }
@@ -623,6 +872,618 @@ export default function AdminDashboard() {
     }
   };
 
+  // ─── ASSIGNMENT HANDLERS ─────────────────────────────────────────────────
+
+  const members = useMemo(() => applicants.filter(a => a.status === 'Accepted' && a.email), [applicants]);
+
+  const handleSelectAssignment = async (asgn: Assignment) => {
+    setSelectedAssignment(asgn);
+    setIsLoadingSubmissions(true);
+    try {
+      const subs = await getSubmissionsForAssignment(asgn.id);
+      setAssignmentSubmissions(subs);
+    } catch { setAssignmentSubmissions([]); }
+    finally { setIsLoadingSubmissions(false); }
+  };
+
+  const getNonSubmitters = (asgn: Assignment, subs: AssignmentSubmission[]) => {
+    const submittedEmails = new Set(subs.map(s => s.memberEmail.toLowerCase()));
+    let pool = asgn.recipientType === 'specific'
+      ? asgn.specificRecipients.map(email => {
+          const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+          return { email, name: found ? found.name : email.split('@')[0], id: found?.id || email };
+        })
+      : (members.length > 0 ? members : applicants.filter(a => a.email));
+    return pool.filter(m => !submittedEmails.has(m.email.toLowerCase()));
+  };
+
+  const handleCreateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignmentForm.title || !assignmentForm.dueDate) {
+      showToast('Missing Fields', 'Title and due date are required.'); return;
+    }
+
+    if (assignmentForm.recipientType === 'specific' && assignmentForm.specificRecipients.length === 0) {
+      showToast('Recipients Required', 'Please select at least one recipient for this specific assignment.');
+      return;
+    }
+
+    setIsSendingAssignmentEmail(true);
+    try {
+      const newId = await addAssignment({
+        ...assignmentForm,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUserEmail,
+        remindersSent: 0,
+        isActive: true,
+      });
+
+      const newAsgn: Assignment = { id: newId, ...assignmentForm, createdAt: new Date().toISOString(), createdBy: currentUserEmail, remindersSent: 0, isActive: true };
+      setAssignments(prev => [newAsgn, ...prev]);
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'ASSIGNMENT_CREATE', details: `Created assignment "${assignmentForm.title}"` });
+
+      // Build recipient pool
+      let recipientPool: { email: string; name: string }[] = [];
+      if (assignmentForm.recipientType === 'all_members') {
+        recipientPool = members.length > 0
+          ? members.map(m => ({ email: m.email, name: m.name }))
+          : applicants.filter(a => a.email).map(a => ({ email: a.email, name: a.name }));
+      } else {
+        recipientPool = assignmentForm.specificRecipients.map(email => {
+          const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+          return { email, name: found ? found.name : email.split('@')[0] };
+        });
+      }
+
+      if (recipientPool.length > 0) {
+        try {
+          const res = await fetch('/api/send-assignment-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'announce',
+              recipients: recipientPool,
+              ccEmails: assignmentForm.ccAdmins,
+              assignment: {
+                title: assignmentForm.title,
+                description: assignmentForm.description,
+                dueDate: assignmentForm.dueDate,
+                submissionLink: assignmentForm.submissionLink,
+                tags: assignmentForm.tags
+              },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast('Email Warning', data.error || 'Assignment saved, but notification emails failed.');
+          } else {
+            showToast('Assignment Created', `Notification dispatched to ${recipientPool.length} recipient(s).`);
+          }
+        } catch (fetchErr: any) {
+          showToast('Email Error', fetchErr?.message || 'Assignment saved, but email API call failed.');
+        }
+      } else {
+        showToast('Assignment Created', 'Assignment saved (no members in cohort to email).');
+      }
+
+      setAssignmentForm({
+        title: '',
+        description: '',
+        dueDate: '',
+        submissionLink: '',
+        recipientType: 'all_members',
+        specificRecipients: [],
+        ccAdmins: [],
+        tags: [],
+        isPriority: false,
+        attachmentUrls: [],
+      });
+      setShowCreateAssignment(false);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to create assignment.'); }
+    finally { setIsSendingAssignmentEmail(false); }
+  };
+
+  const handleUploadAssignmentFiles = async (files: FileList | null, isEdit = false) => {
+    if (!files || files.length === 0) return;
+    setIsUploadingAssignmentFile(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          body: file,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        const newAtt = { name: file.name, url: data.url };
+        if (isEdit) {
+          setEditAssignmentForm(f => ({
+            ...f,
+            attachmentUrls: [...(f.attachmentUrls || []), newAtt]
+          }));
+        } else {
+          setAssignmentForm(f => ({
+            ...f,
+            attachmentUrls: [...(f.attachmentUrls || []), newAtt]
+          }));
+        }
+      }
+      showToast("Files Attached", `Uploaded ${files.length} file(s) successfully.`);
+    } catch (err: any) {
+      console.error(err);
+      showToast("Upload Error", err.message || "Failed to upload file.");
+    } finally {
+      setIsUploadingAssignmentFile(false);
+    }
+  };
+
+  const handleOpenEditAssignment = (asgn: Assignment) => {
+    setEditingAssignment(asgn);
+    setEditAssignmentForm({
+      title: asgn.title,
+      description: asgn.description,
+      dueDate: asgn.dueDate,
+      submissionLink: asgn.submissionLink || '',
+      recipientType: asgn.recipientType,
+      specificRecipients: asgn.specificRecipients || [],
+      ccAdmins: asgn.ccAdmins || [],
+      tags: asgn.tags || [],
+      isPriority: !!asgn.isPriority,
+      attachmentUrls: asgn.attachmentUrls || [],
+    });
+    setEditAssignmentNotify(true);
+    setShowEditAssignment(true);
+  };
+
+  const handleSaveAssignmentEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssignment) return;
+    if (!editAssignmentForm.title || !editAssignmentForm.dueDate) {
+      showToast('Missing Fields', 'Title and due date are required.'); return;
+    }
+    if (editAssignmentForm.recipientType === 'specific' && editAssignmentForm.specificRecipients.length === 0) {
+      showToast('Recipients Required', 'Please select at least one recipient for this specific assignment.');
+      return;
+    }
+    setIsSavingAssignmentEdit(true);
+    try {
+      const updatedData: Partial<Assignment> = {
+        title: editAssignmentForm.title,
+        description: editAssignmentForm.description,
+        dueDate: editAssignmentForm.dueDate,
+        submissionLink: editAssignmentForm.submissionLink || undefined,
+        recipientType: editAssignmentForm.recipientType,
+        specificRecipients: editAssignmentForm.specificRecipients,
+        ccAdmins: editAssignmentForm.ccAdmins,
+        tags: editAssignmentForm.tags,
+        isPriority: editAssignmentForm.isPriority,
+        attachmentUrls: editAssignmentForm.attachmentUrls,
+      };
+
+      await updateAssignment(editingAssignment.id, updatedData);
+      setAssignments(prev => prev.map(a => a.id === editingAssignment.id ? { ...a, ...updatedData } : a));
+      if (selectedAssignment?.id === editingAssignment.id) {
+        setSelectedAssignment(prev => prev ? { ...prev, ...updatedData } : null);
+      }
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'ASSIGNMENT_UPDATE', details: `Updated assignment "${editAssignmentForm.title}"` });
+
+      if (editAssignmentNotify) {
+        let recipientPool: { email: string; name: string }[] = [];
+        if (editAssignmentForm.recipientType === 'all_members') {
+          recipientPool = members.length > 0
+            ? members.map(m => ({ email: m.email, name: m.name }))
+            : applicants.filter(a => a.email).map(a => ({ email: a.email, name: a.name }));
+        } else {
+          recipientPool = editAssignmentForm.specificRecipients.map(email => {
+            const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+            return { email, name: found ? found.name : email.split('@')[0] };
+          });
+        }
+
+        if (recipientPool.length > 0) {
+          try {
+            await fetch('/api/send-assignment-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'update',
+                recipients: recipientPool,
+                ccEmails: editAssignmentForm.ccAdmins,
+                assignment: {
+                  title: editAssignmentForm.title,
+                  description: editAssignmentForm.description,
+                  dueDate: editAssignmentForm.dueDate,
+                  submissionLink: editAssignmentForm.submissionLink,
+                  tags: editAssignmentForm.tags,
+                  attachmentUrls: editAssignmentForm.attachmentUrls,
+                },
+              }),
+            });
+            showToast('Assignment Updated', `Update saved & notification emails sent to ${recipientPool.length} recipient(s).`);
+          } catch {
+            showToast('Assignment Updated', 'Saved in database (notification email failed).');
+          }
+        } else {
+          showToast('Assignment Updated', 'Changes saved successfully.');
+        }
+      } else {
+        showToast('Assignment Updated', 'Changes saved successfully.');
+      }
+      setShowEditAssignment(false);
+    } catch (err: any) {
+      console.error(err);
+      showToast('Error', err.message || 'Failed to update assignment.');
+    } finally {
+      setIsSavingAssignmentEdit(false);
+    }
+  };
+
+  const handleSendReminders = async (asgn: Assignment) => {
+    const nonSubmitters = getNonSubmitters(asgn, assignmentSubmissions);
+    if (nonSubmitters.length === 0) { showToast('All Submitted', 'Everyone has submitted this assignment!'); return; }
+    if (!confirm(`Send reminder to ${nonSubmitters.length} non-submitter(s)?`)) return;
+    setIsSendingReminders(true);
+    try {
+      await fetch('/api/send-assignment-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'reminder',
+          recipients: nonSubmitters.map(m => ({ email: m.email, name: m.name })),
+          ccEmails: asgn.ccAdmins || [],
+          assignment: { title: asgn.title, description: asgn.description, dueDate: asgn.dueDate, submissionLink: asgn.submissionLink },
+        }),
+      });
+      await updateAssignment(asgn.id, { remindersSent: (asgn.remindersSent || 0) + 1, lastReminderAt: new Date().toISOString() });
+      setAssignments(prev => prev.map(a => a.id === asgn.id ? { ...a, remindersSent: (a.remindersSent || 0) + 1, lastReminderAt: new Date().toISOString() } : a));
+      if (selectedAssignment?.id === asgn.id) setSelectedAssignment(prev => prev ? { ...prev, remindersSent: (prev.remindersSent || 0) + 1 } : null);
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'ASSIGNMENT_REMINDER', details: `Sent reminders for "${asgn.title}" to ${nonSubmitters.length} non-submitters.` });
+      showToast('Reminders Sent', `Fired ${nonSubmitters.length} reminder emails.`);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to send reminders.'); }
+    finally { setIsSendingReminders(false); }
+  };
+
+  const handleMarkSubmitted = async (member: Applicant, asgn: Assignment) => {
+    const already = assignmentSubmissions.some(s => s.memberEmail.toLowerCase() === member.email.toLowerCase());
+    if (already) { showToast('Already Submitted', `${member.name} is already marked as submitted.`); return; }
+    try {
+      const subId = await addSubmission({ assignmentId: asgn.id, memberEmail: member.email, memberName: member.name, submittedAt: new Date().toISOString() });
+      setAssignmentSubmissions(prev => [...prev, { id: subId, assignmentId: asgn.id, memberEmail: member.email, memberName: member.name, submittedAt: new Date().toISOString() }]);
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'SUBMISSION_MARKED', details: `Marked ${member.name} as submitted for "${asgn.title}"` });
+      showToast('Marked Submitted', `${member.name} marked as submitted.`);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to mark submission.'); }
+  };
+
+  const handleUnmarkSubmitted = async (sub: AssignmentSubmission) => {
+    try {
+      await removeSubmission(sub.id);
+      setAssignmentSubmissions(prev => prev.filter(s => s.id !== sub.id));
+      showToast('Submission Removed', `${sub.memberName} unmarked.`);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to remove submission.'); }
+  };
+
+  const handleDeleteAssignment = async (asgn: Assignment) => {
+    if (!confirm(`Delete assignment "${asgn.title}"?`)) return;
+    try {
+      await removeAssignment(asgn.id);
+      setAssignments(prev => prev.filter(a => a.id !== asgn.id));
+      if (selectedAssignment?.id === asgn.id) setSelectedAssignment(null);
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'ASSIGNMENT_DELETE', details: `Deleted assignment "${asgn.title}"` });
+      showToast('Deleted', `Assignment removed.`);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to delete assignment.'); }
+  };
+
+  const handleToggleAssignmentActive = async (asgn: Assignment) => {
+    try {
+      await updateAssignment(asgn.id, { isActive: !asgn.isActive });
+      setAssignments(prev => prev.map(a => a.id === asgn.id ? { ...a, isActive: !a.isActive } : a));
+      if (selectedAssignment?.id === asgn.id) setSelectedAssignment(prev => prev ? { ...prev, isActive: !prev.isActive } : null);
+      showToast('Updated', `Assignment ${!asgn.isActive ? 'activated' : 'deactivated'}.`);
+    } catch { showToast('Error', 'Failed to toggle.'); }
+  };
+
+  const exportSubmissionsCSV = (asgn: Assignment, subs: AssignmentSubmission[]) => {
+    const rows = [['Name', 'Email', 'Submitted At', 'URL', 'Notes']];
+    subs.forEach(s => rows.push([s.memberName, s.memberEmail, s.submittedAt, s.submissionUrl || '', s.notes || '']));
+    const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${asgn.title}_submissions.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ─── CLASS SESSION HANDLERS ──────────────────────────────────────────────
+
+  const upcomingSessions = useMemo(() => {
+    const now = new Date();
+    return classSessions.filter(s => {
+      if (s.isCancelled) return false;
+      const sessionDate = new Date(`${s.date}T${s.time || '00:00'}`);
+      return sessionDate >= now;
+    }).sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+  }, [classSessions]);
+
+  const nextSession = upcomingSessions[0];
+
+  const getCountdown = (session: ClassSession) => {
+    const now = new Date();
+    const sessionDate = new Date(`${session.date}T${session.time || '00:00'}`);
+    const diff = sessionDate.getTime() - now.getTime();
+    if (diff <= 0) return 'Now / Past';
+    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
+  const handleCreateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionForm.title || !sessionForm.date || !sessionForm.time) {
+      showToast('Missing Fields', 'Title, date, and time are required.'); return;
+    }
+
+    if (sessionForm.recipientType === 'specific' && sessionForm.specificRecipients.length === 0) {
+      showToast('Recipients Required', 'Please select at least one recipient for this specific session.');
+      return;
+    }
+
+    setIsSendingClassEmail(true);
+    try {
+      const newId = await addClassSession({
+        ...sessionForm,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUserEmail,
+        reminderSent: false,
+        isCancelled: false,
+      });
+
+      const newSession: ClassSession = { id: newId, ...sessionForm, createdAt: new Date().toISOString(), createdBy: currentUserEmail, reminderSent: false, isCancelled: false };
+      setClassSessions(prev => [...prev, newSession].sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime()));
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'SESSION_CREATE', details: `Scheduled class "${sessionForm.title}" on ${sessionForm.date}` });
+
+      // Build recipient pool
+      let recipientPool: { email: string; name: string }[] = [];
+      if (sessionForm.recipientType === 'all_members') {
+        recipientPool = members.length > 0
+          ? members.map(m => ({ email: m.email, name: m.name }))
+          : applicants.filter(a => a.email).map(a => ({ email: a.email, name: a.name }));
+      } else {
+        recipientPool = sessionForm.specificRecipients.map(email => {
+          const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+          return { email, name: found ? found.name : email.split('@')[0] };
+        });
+      }
+
+      if (recipientPool.length > 0) {
+        try {
+          const res = await fetch('/api/send-class-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'invite',
+              recipients: recipientPool,
+              ccEmails: sessionForm.ccAdmins,
+              session: {
+                title: sessionForm.title,
+                description: sessionForm.description,
+                date: sessionForm.date,
+                time: sessionForm.time,
+                duration: sessionForm.duration,
+                type: sessionForm.type,
+                meetLink: sessionForm.meetLink,
+                location: sessionForm.location,
+                tags: sessionForm.tags
+              },
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast('Email Warning', data.error || 'Class scheduled, but invite emails failed.');
+          } else {
+            showToast('Class Scheduled', `Invites dispatched to ${recipientPool.length} recipient(s).`);
+          }
+        } catch (fetchErr: any) {
+          showToast('Email Error', fetchErr?.message || 'Class scheduled, but email API call failed.');
+        }
+      } else {
+        showToast('Class Scheduled', 'Class saved (no members in cohort to email).');
+      }
+
+      setSessionForm({ title: '', description: '', date: '', time: '', duration: 60, type: 'online', meetLink: '', location: '', recipientType: 'all_members', specificRecipients: [], ccAdmins: [], isRecurring: false, recurringPattern: 'weekly', tags: [] });
+      setShowCreateSession(false);
+    } catch (err) { console.error(err); showToast('Error', 'Failed to create session.'); }
+    finally { setIsSendingClassEmail(false); }
+  };
+
+  const handleOpenEditSession = (session: ClassSession) => {
+    setEditingSession(session);
+    setEditSessionForm({
+      title: session.title,
+      description: session.description || '',
+      date: session.date,
+      time: session.time,
+      duration: session.duration || 60,
+      type: session.type,
+      meetLink: session.meetLink || '',
+      location: session.location || '',
+      recipientType: session.recipientType,
+      specificRecipients: session.specificRecipients || [],
+      ccAdmins: session.ccAdmins || [],
+      isRecurring: !!session.isRecurring,
+      recurringPattern: session.recurringPattern || 'weekly',
+      tags: session.tags || [],
+    });
+    setEditSessionNotify(true);
+    setShowEditSession(true);
+  };
+
+  const handleSaveSessionEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+    if (!editSessionForm.title || !editSessionForm.date || !editSessionForm.time) {
+      showToast('Missing Fields', 'Title, date, and time are required.'); return;
+    }
+    if (editSessionForm.recipientType === 'specific' && editSessionForm.specificRecipients.length === 0) {
+      showToast('Recipients Required', 'Please select at least one recipient for this specific session.');
+      return;
+    }
+    setIsSavingSessionEdit(true);
+    try {
+      const updatedData: Partial<ClassSession> = {
+        title: editSessionForm.title,
+        description: editSessionForm.description,
+        date: editSessionForm.date,
+        time: editSessionForm.time,
+        duration: editSessionForm.duration,
+        type: editSessionForm.type,
+        meetLink: editSessionForm.meetLink || undefined,
+        location: editSessionForm.location || undefined,
+        recipientType: editSessionForm.recipientType,
+        specificRecipients: editSessionForm.specificRecipients,
+        ccAdmins: editSessionForm.ccAdmins,
+        isRecurring: editSessionForm.isRecurring,
+        recurringPattern: editSessionForm.recurringPattern,
+        tags: editSessionForm.tags,
+      };
+
+      await updateClassSession(editingSession.id, updatedData);
+      setClassSessions(prev => prev.map(s => s.id === editingSession.id ? { ...s, ...updatedData } : s).sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime()));
+      if (selectedSession?.id === editingSession.id) {
+        setSelectedSession(prev => prev ? { ...prev, ...updatedData } : null);
+      }
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'SESSION_UPDATE', details: `Updated class "${editSessionForm.title}"` });
+
+      if (editSessionNotify) {
+        let recipientPool: { email: string; name: string }[] = [];
+        if (editSessionForm.recipientType === 'all_members') {
+          recipientPool = members.length > 0
+            ? members.map(m => ({ email: m.email, name: m.name }))
+            : applicants.filter(a => a.email).map(a => ({ email: a.email, name: a.name }));
+        } else {
+          recipientPool = editSessionForm.specificRecipients.map(email => {
+            const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+            return { email, name: found ? found.name : email.split('@')[0] };
+          });
+        }
+
+        if (recipientPool.length > 0) {
+          try {
+            await fetch('/api/send-class-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'update',
+                recipients: recipientPool,
+                ccEmails: editSessionForm.ccAdmins,
+                session: {
+                  title: editSessionForm.title,
+                  description: editSessionForm.description,
+                  date: editSessionForm.date,
+                  time: editSessionForm.time,
+                  duration: editSessionForm.duration,
+                  type: editSessionForm.type,
+                  meetLink: editSessionForm.meetLink,
+                  location: editSessionForm.location,
+                  tags: editSessionForm.tags,
+                },
+              }),
+            });
+            showToast('Class Updated', `Session updated & reschedule emails dispatched to ${recipientPool.length} recipient(s).`);
+          } catch {
+            showToast('Class Updated', 'Saved in database (notification email failed).');
+          }
+        } else {
+          showToast('Class Updated', 'Changes saved successfully.');
+        }
+      } else {
+        showToast('Class Updated', 'Changes saved successfully.');
+      }
+      setShowEditSession(false);
+    } catch (err: any) {
+      console.error(err);
+      showToast('Error', err.message || 'Failed to update class.');
+    } finally {
+      setIsSavingSessionEdit(false);
+    }
+  };
+
+  const handleOpenCancelModal = (session: ClassSession) => {
+    setSessionToCancel(session);
+    setCancelReasonInput('');
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancelSession = async () => {
+    if (!sessionToCancel) return;
+    setIsCancellingSession(true);
+    try {
+      await updateClassSession(sessionToCancel.id, {
+        isCancelled: true,
+        cancelReason: cancelReasonInput.trim() || undefined,
+      });
+
+      setClassSessions(prev => prev.map(s => s.id === sessionToCancel.id ? { ...s, isCancelled: true, cancelReason: cancelReasonInput.trim() || undefined } : s));
+      if (selectedSession?.id === sessionToCancel.id) {
+        setSelectedSession(prev => prev ? { ...prev, isCancelled: true, cancelReason: cancelReasonInput.trim() || undefined } : null);
+      }
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'SESSION_CANCEL', details: `Cancelled class "${sessionToCancel.title}". Reason: ${cancelReasonInput.trim() || 'None'}` });
+
+      const recipientPool = sessionToCancel.recipientType === 'all_members'
+        ? (members.length > 0 ? members.map(m => ({ email: m.email, name: m.name })) : applicants.filter(a => a.email).map(a => ({ email: a.email, name: a.name })))
+        : sessionToCancel.specificRecipients.map(email => {
+            const found = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+            return { email, name: found ? found.name : email.split('@')[0] };
+          });
+
+      if (recipientPool.length > 0) {
+        const res = await fetch('/api/send-class-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'cancelled',
+            recipients: recipientPool,
+            ccEmails: sessionToCancel.ccAdmins,
+            session: {
+              title: sessionToCancel.title,
+              date: sessionToCancel.date,
+              time: sessionToCancel.time,
+              type: sessionToCancel.type,
+              cancelReason: cancelReasonInput.trim() || undefined,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast('Email Warning', data.error || 'Class marked cancelled, but email delivery encountered an issue.');
+        } else {
+          showToast('Session Terminated', `Cancellation emails delivered to ${recipientPool.length} recipient(s).`);
+        }
+      } else {
+        showToast('Cancelled', 'Class session marked cancelled.');
+      }
+      setShowCancelModal(false);
+      setSessionToCancel(null);
+    } catch (err: any) {
+      console.error(err);
+      showToast('Error', err.message || 'Failed to cancel session.');
+    } finally {
+      setIsCancellingSession(false);
+    }
+  };
+
+  const handleDeleteSession = async (session: ClassSession) => {
+    if (!confirm(`Permanently delete "${session.title}"?`)) return;
+    try {
+      await removeClassSession(session.id);
+      setClassSessions(prev => prev.filter(s => s.id !== session.id));
+      if (selectedSession?.id === session.id) setSelectedSession(null);
+      addAuditLog({ adminEmail: currentUserEmail, actionType: 'SESSION_DELETE', details: `Deleted class "${session.title}"` });
+      showToast('Deleted', 'Session removed.');
+    } catch { showToast('Error', 'Failed to delete session.'); }
+  };
+
   // Render Loading
   if (isLoading) {
     return (
@@ -745,6 +1606,22 @@ export default function AdminDashboard() {
           </button>
           {isSuperAdmin && (
             <button 
+              onClick={() => setActiveTab('assignments')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'assignments' ? 'bg-orange-500/20 text-orange-400 shadow-inner border border-orange-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              <ClipboardList size={18} /> Assignments
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button 
+              onClick={() => setActiveTab('schedule')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'schedule' ? 'bg-blue-500/20 text-blue-400 shadow-inner border border-blue-500/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              <CalendarDays size={18} /> Class Schedule
+            </button>
+          )}
+          {isSuperAdmin && (
+            <button 
               onClick={() => setActiveTab('admins')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'admins' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
@@ -808,6 +1685,24 @@ export default function AdminDashboard() {
           <Mail size={20} />
           <span className="text-[10px]">Comms</span>
         </button>
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setActiveTab('assignments')}
+            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'assignments' ? 'text-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <ClipboardList size={20} />
+            <span className="text-[10px]">Tasks</span>
+          </button>
+        )}
+        {isSuperAdmin && (
+          <button 
+            onClick={() => setActiveTab('schedule')}
+            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${activeTab === 'schedule' ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+          >
+            <CalendarDays size={20} />
+            <span className="text-[10px]">Classes</span>
+          </button>
+        )}
         {isSuperAdmin && (
           <button 
             onClick={() => setActiveTab('admins')}
@@ -1106,14 +2001,120 @@ export default function AdminDashboard() {
           {/* EMAILS TAB */}
           {activeTab === 'emails' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full flex flex-col gap-6">
-              <div className="flex justify-between items-center mb-6 shrink-0">
+              <div className="flex justify-between items-center mb-2 shrink-0">
                 <div>
                   <h3 className="text-white font-bold text-xl mb-1 flex items-center gap-2">
                     <Mail className="text-purple-500" size={24} /> 
                     Communications Studio
                   </h3>
-                  <p className="text-gray-400 text-sm">Design and dispatch transmissions to the cohort.</p>
+                  <p className="text-gray-400 text-sm">Design, synthesize with Gemini AI, and dispatch transmissions to the cohort.</p>
                 </div>
+              </div>
+
+              {/* GEMINI AI ASSISTANT PANEL */}
+              <div className="bg-gradient-to-r from-purple-950/40 via-black to-[#111] border border-purple-500/30 rounded-2xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-md">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+                
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 relative z-10">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                      <Sparkles size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        Gemini AI Transmission Synthesis
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          VEKTOR Design Engine
+                        </span>
+                      </h4>
+                      <p className="text-xs text-gray-400">Instruct Gemini to compose or elevate any email adhering to VEKTOR's brand voice.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select 
+                      value={aiTone}
+                      onChange={(e) => setAiTone(e.target.value)}
+                      className="bg-black/60 border border-white/15 rounded-lg px-3 py-1.5 text-xs text-purple-200 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="VEKTOR Elite & Authoritative">Tone: VEKTOR Elite & Authoritative</option>
+                      <option value="Urgent & Direct">Tone: Urgent & Direct</option>
+                      <option value="Formal & Precise">Tone: Formal & Precise</option>
+                      <option value="Encouraging & Inspiring">Tone: Encouraging & Inspiring</option>
+                    </select>
+                    
+                    {emailBody.trim() && (
+                      <button
+                        type="button"
+                        disabled={isGeneratingWithAi}
+                        onClick={() => handleGenerateAiEmail('polish')}
+                        className="bg-white/10 hover:bg-white/15 text-purple-200 border border-purple-500/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                        title="Polish and upgrade your current draft into VEKTOR style"
+                      >
+                        <Wand2 size={13} />
+                        Polish Draft
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Prompt Input & Generate Button */}
+                <div className="flex flex-col sm:flex-row gap-2 relative z-10">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleGenerateAiEmail('new');
+                        }
+                      }}
+                      placeholder="e.g., Shortlist candidates for technical round 2 and instruct them to bring their laptops..."
+                      className="w-full bg-black/70 border border-white/15 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isGeneratingWithAi || !aiPrompt.trim()}
+                    onClick={() => handleGenerateAiEmail('new')}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(147,51,234,0.3)] shrink-0"
+                  >
+                    {isGeneratingWithAi ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Synthesizing...</>
+                    ) : (
+                      <><Sparkles size={14} /> Generate with Gemini</>
+                    )}
+                  </button>
+                </div>
+
+                {/* Quick Preset Chips */}
+                <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 relative z-10 scrollbar-none text-[11px]">
+                  <span className="text-gray-500 font-mono text-[10px] uppercase tracking-wider shrink-0 mr-1">Presets:</span>
+                  {AI_PROMPT_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      disabled={isGeneratingWithAi}
+                      onClick={() => {
+                        setAiPrompt(preset.prompt);
+                        setAiTone(preset.tone);
+                        handleGenerateAiEmail('new', preset.prompt);
+                      }}
+                      className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-purple-500/20 border border-white/10 hover:border-purple-500/40 text-gray-300 hover:text-white transition-all whitespace-nowrap shrink-0 flex items-center gap-1"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {aiExplanation && (
+                  <div className="mt-2.5 text-[11px] text-purple-300/80 italic flex items-center gap-1.5">
+                    <Check size={12} className="text-purple-400" />
+                    <span>{aiExplanation}</span>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1175,6 +2176,83 @@ export default function AdminDashboard() {
                               </div>
                             ))}
                           </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CC Admins Picker */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        CC Admins <span className="text-gray-600 normal-case">(optional — select admins to receive a copy)</span>
+                      </label>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowCcDropdown(!showCcDropdown)}
+                          className="w-full flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none hover:border-purple-500/50 transition-colors"
+                        >
+                          <span className="flex items-center gap-2 text-gray-400">
+                            <Users2 size={14} />
+                            {commsCcAdmins.length === 0
+                              ? 'No admins in CC'
+                              : `${commsCcAdmins.length} admin(s) in CC`}
+                          </span>
+                          <ChevronDown size={14} className={`transition-transform ${showCcDropdown ? 'rotate-180' : ''}`} />
+                        </button>
+                        <AnimatePresence>
+                          {showCcDropdown && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-30 shadow-2xl"
+                            >
+                              {admins.length === 0 && (
+                                <p className="text-gray-500 text-xs p-3 text-center">No admins in system</p>
+                              )}
+                              {admins.map(admin => (
+                                <button
+                                  key={admin.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCommsCcAdmins(prev =>
+                                      prev.includes(admin.email)
+                                        ? prev.filter(e => e !== admin.email)
+                                        : [...prev, admin.email]
+                                    );
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+                                >
+                                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${commsCcAdmins.includes(admin.email) ? 'bg-purple-500 border-purple-500' : 'border-white/20'}`}>
+                                    {commsCcAdmins.includes(admin.email) && <Check size={12} className="text-white" />}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-white font-medium">{admin.email}</p>
+                                    <p className="text-xs text-gray-500">{admin.role}</p>
+                                  </div>
+                                </button>
+                              ))}
+                              {commsCcAdmins.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCommsCcAdmins([])}
+                                  className="w-full px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors text-center border-t border-white/5"
+                                >
+                                  Clear all CC
+                                </button>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      {commsCcAdmins.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {commsCcAdmins.map(email => (
+                            <span key={email} className="flex items-center gap-1 bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs px-2 py-1 rounded-full">
+                              {email}
+                              <button type="button" onClick={() => setCommsCcAdmins(prev => prev.filter(e => e !== email))} className="hover:text-white ml-1">×</button>
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1242,6 +2320,82 @@ export default function AdminDashboard() {
                         placeholder="Type your message here..."
                         className="w-full flex-1 bg-[#1a1a1a] border border-white/10 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-purple-500/50 font-mono resize-none min-h-[200px]"
                       />
+                    </div>
+
+                    {/* File Attachments Zone */}
+                    <div className="bg-[#161616] border border-white/10 rounded-xl p-4 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Paperclip size={15} className="text-purple-400" />
+                          <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">File Attachments</span>
+                          <span className="text-[10px] text-gray-500">
+                            ({emailAttachments.length} attached &bull; max 15MB)
+                          </span>
+                        </div>
+
+                        <label className="cursor-pointer bg-white/10 hover:bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-white/10 transition-colors flex items-center gap-1.5">
+                          <Upload size={12} />
+                          <span>Attach Files</span>
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                handleAddAttachments(e.target.files);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      {/* Drag & Drop or Empty State */}
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setIsAttachmentDragging(true); }}
+                        onDragLeave={() => setIsAttachmentDragging(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsAttachmentDragging(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            handleAddAttachments(e.dataTransfer.files);
+                          }
+                        }}
+                        className={`border border-dashed rounded-lg p-3 transition-colors ${
+                          isAttachmentDragging 
+                            ? 'border-purple-500 bg-purple-500/10' 
+                            : 'border-white/10 bg-black/30'
+                        }`}
+                      >
+                        {emailAttachments.length === 0 ? (
+                          <p className="text-xs text-gray-500 text-center py-2">
+                            Drag &amp; drop files here, or click <span className="text-purple-400 font-semibold">Attach Files</span> above (PDF, DOCX, ZIP, images, etc.)
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {emailAttachments.map((att) => (
+                              <div
+                                key={att.id}
+                                className="flex items-center gap-2 bg-[#222] border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white group"
+                              >
+                                <File size={13} className="text-purple-400 shrink-0" />
+                                <span className="truncate max-w-[160px] font-medium" title={att.name}>{att.name}</span>
+                                <span className="text-[10px] text-gray-400 font-mono">
+                                  ({(att.size / 1024).toFixed(0)} KB)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(att.id)}
+                                  className="text-gray-500 hover:text-red-400 p-0.5 rounded transition-colors"
+                                  title="Remove attachment"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="pt-4 border-t border-white/10 flex justify-end">
@@ -1311,6 +2465,24 @@ export default function AdminDashboard() {
                           </>
                         ) : (
                           <div dangerouslySetInnerHTML={{ __html: emailBody.replace(/{{name}}/gi, '[Applicant Name]').replace(/\n/g, '<br>') }} />
+                        )}
+
+                        {/* Attached Files Preview */}
+                        {emailAttachments.length > 0 && (
+                          <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '12px' }}>
+                            <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '2px', color: '#888888', fontWeight: 700, marginBottom: '8px' }}>
+                              Attached Transmissions ({emailAttachments.length})
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {emailAttachments.map((att) => (
+                                <div key={att.id} style={{ fontSize: '12px', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>📎</span>
+                                  <span style={{ fontWeight: 500 }}>{att.name}</span>
+                                  <span style={{ fontSize: '10px', color: '#888888' }}>({(att.size / 1024).toFixed(0)} KB)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                       
@@ -1392,7 +2564,1344 @@ export default function AdminDashboard() {
             </motion.div>
           )}
 
-          {/* SETTINGS TAB */}
+          {/* ASSIGNMENTS TAB */}
+          {activeTab === 'assignments' && isSuperAdmin && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                    <ClipboardList className="text-orange-500" size={24} /> Assignments
+                  </h3>
+                  <p className="text-gray-400 text-sm mt-1">Deploy directives to members. Track submissions. Fire auto-reminders.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-3 py-1 rounded-full">{members.length} active members</span>
+                  <button
+                    onClick={() => setShowCreateAssignment(true)}
+                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-black font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)]"
+                  >
+                    <Plus size={16} /> New Assignment
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total', value: assignments.length, color: 'white', icon: ClipboardList },
+                  { label: 'Active', value: assignments.filter(a => a.isActive).length, color: 'orange', icon: Zap },
+                  { label: 'Overdue', value: assignments.filter(a => a.isActive && new Date(a.dueDate) < new Date()).length, color: 'red', icon: AlertTriangle },
+                  { label: 'Members', value: members.length, color: 'green', icon: Users2 },
+                ].map(({ label, value, color, icon: Icon }) => (
+                  <div key={label} className="bg-[#111] border border-white/10 rounded-2xl p-4 flex flex-col gap-1">
+                    <Icon size={16} className={`text-${color}-400`} />
+                    <p className={`text-2xl font-bold text-${color}-400`}>{value}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Assignment List + Detail */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* List */}
+                <div className="w-full lg:w-80 shrink-0 flex flex-col gap-2">
+                  {assignments.length === 0 && (
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-8 text-center">
+                      <ClipboardList size={32} className="text-gray-600 mx-auto mb-3" />
+                      <p className="text-gray-400 text-sm">No assignments yet.</p>
+                      <p className="text-gray-600 text-xs mt-1">Create one to get started.</p>
+                    </div>
+                  )}
+                  {assignments.map(asgn => {
+                    const isOverdue = asgn.isActive && new Date(asgn.dueDate) < new Date();
+                    const isSelected = selectedAssignment?.id === asgn.id;
+                    return (
+                      <button
+                        key={asgn.id}
+                        onClick={() => handleSelectAssignment(asgn)}
+                        className={`text-left w-full p-4 rounded-2xl border transition-all ${isSelected ? 'bg-orange-500/10 border-orange-500/40' : 'bg-[#111] border-white/10 hover:border-white/20'}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="text-sm font-bold text-white leading-tight">{asgn.title}</p>
+                          <div className="flex gap-1 shrink-0">
+                            {asgn.isPriority && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-full">PRIORITY</span>}
+                            {isOverdue && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-full">OVERDUE</span>}
+                            {!asgn.isActive && <span className="text-[10px] bg-gray-500/20 text-gray-400 border border-gray-500/30 px-1.5 py-0.5 rounded-full">CLOSED</span>}
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500">Due: {new Date(asgn.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-xs text-gray-600">Reminders: {asgn.remindersSent || 0}</span>
+                          {asgn.tags && asgn.tags.length > 0 && (
+                            <span className="text-[10px] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">{asgn.tags[0]}</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Detail Panel */}
+                <div className="flex-1">
+                  {!selectedAssignment ? (
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px]">
+                      <ClipboardCheck size={40} className="text-gray-600 mb-4" />
+                      <p className="text-gray-400">Select an assignment to view details</p>
+                    </div>
+                  ) : (
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-6 flex flex-col gap-5">
+                      {/* Assignment Header */}
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h4 className="text-white font-bold text-lg">{selectedAssignment.title}</h4>
+                          <p className="text-gray-400 text-sm mt-1 leading-relaxed">{selectedAssignment.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleOpenEditAssignment(selectedAssignment)}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 font-bold transition-colors"
+                            title="Edit Assignment"
+                          >
+                            <Pencil size={13} /> Edit
+                          </button>
+                          <button onClick={() => handleToggleAssignmentActive(selectedAssignment)} className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-colors ${selectedAssignment.isActive ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/30'}`}>
+                            {selectedAssignment.isActive ? 'Active' : 'Closed'}
+                          </button>
+                          <button onClick={() => handleDeleteAssignment(selectedAssignment)} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Meta info */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-black/40 border border-white/5 rounded-xl p-3">
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Due Date</p>
+                          <p className="text-sm text-white font-medium">{new Date(selectedAssignment.dueDate).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                        </div>
+                        <div className="bg-black/40 border border-white/5 rounded-xl p-3">
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Reminders Sent</p>
+                          <p className="text-sm text-orange-400 font-bold">{selectedAssignment.remindersSent || 0}</p>
+                        </div>
+                        {selectedAssignment.submissionLink && (
+                          <div className="col-span-2 bg-black/40 border border-white/5 rounded-xl p-3">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Submission Link</p>
+                            <a href={selectedAssignment.submissionLink} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors">
+                              <Link size={12} />{selectedAssignment.submissionLink}
+                            </a>
+                          </div>
+                        )}
+                        {selectedAssignment.attachmentUrls && selectedAssignment.attachmentUrls.length > 0 && (
+                          <div className="col-span-2 bg-black/40 border border-white/5 rounded-xl p-3">
+                            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Attached Materials ({selectedAssignment.attachmentUrls.length})</p>
+                            <div className="flex flex-wrap gap-2">
+                              {selectedAssignment.attachmentUrls.map((att, i) => (
+                                <a
+                                  key={i}
+                                  href={att.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-orange-500/40 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                >
+                                  <Paperclip size={12} className="text-gray-400" />
+                                  <span className="font-medium truncate max-w-xs">{att.name}</span>
+                                  <ExternalLink size={11} className="text-gray-500" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleSendReminders(selectedAssignment)}
+                          disabled={isSendingReminders}
+                          className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+                        >
+                          {isSendingReminders ? <RefreshCw size={14} className="animate-spin" /> : <BellRing size={14} />}
+                          Send Reminders to Non-Submitters
+                        </button>
+                        <button
+                          onClick={() => exportSubmissionsCSV(selectedAssignment, assignmentSubmissions)}
+                          className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+                        >
+                          <Download size={14} /> Export CSV
+                        </button>
+                      </div>
+
+                      {/* Submissions Tracker */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="text-white font-bold text-sm flex items-center gap-2">
+                            <ClipboardCheck size={16} className="text-green-400" /> Submission Tracker
+                          </h5>
+                          <span className="text-xs text-gray-500">{assignmentSubmissions.length}/{(() => { const pool = selectedAssignment.recipientType === 'specific' ? members.filter(m => selectedAssignment.specificRecipients.includes(m.email)) : members; return pool.length; })()} submitted</span>
+                        </div>
+                        {/* Progress Bar */}
+                        <div className="w-full h-2 bg-white/5 rounded-full mb-4 overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all"
+                            style={{
+                              width: `${Math.round(assignmentSubmissions.length / Math.max(1, (selectedAssignment.recipientType === 'specific' ? members.filter(m => selectedAssignment.specificRecipients.includes(m.email)) : members).length) * 100)}%`
+                            }}
+                          />
+                        </div>
+                        {isLoadingSubmissions ? (
+                          <div className="flex items-center justify-center py-8">
+                            <RefreshCw size={20} className="text-gray-500 animate-spin" />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            {(selectedAssignment.recipientType === 'specific'
+                              ? members.filter(m => selectedAssignment.specificRecipients.includes(m.email))
+                              : members
+                            ).map(member => {
+                              const sub = assignmentSubmissions.find(s => s.memberEmail.toLowerCase() === member.email.toLowerCase());
+                              return (
+                                <div key={member.id} className={`flex items-center justify-between p-3 rounded-xl border ${sub ? 'bg-green-500/5 border-green-500/20' : 'bg-black/20 border-white/5'}`}>
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${sub ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'}`}>
+                                      {sub ? <Check size={12} /> : <Clock size={12} />}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm text-white font-medium">{member.name}</p>
+                                      <p className="text-xs text-gray-500">{member.email}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {sub ? (
+                                      <>
+                                        <span className="text-xs text-green-400">{new Date(sub.submittedAt).toLocaleDateString()}</span>
+                                        <button onClick={() => handleUnmarkSubmitted(sub)} className="text-xs text-red-400 hover:text-red-300 p-1 rounded transition-colors" title="Unmark">
+                                          <XCircle size={14} />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button onClick={() => handleMarkSubmitted(member, selectedAssignment)} className="text-xs bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded-lg transition-colors font-bold">
+                                        Mark Done
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Create Assignment Modal */}
+              <AnimatePresence>
+                {showCreateAssignment && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#111] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                      <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          <ClipboardList size={20} className="text-orange-400" /> New Assignment
+                        </h4>
+                        <button onClick={() => setShowCreateAssignment(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <form onSubmit={handleCreateAssignment} className="p-6 flex flex-col gap-5">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Title *</label>
+                          <input type="text" required value={assignmentForm.title} onChange={e => setAssignmentForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g., Build a REST API in 48 hours" className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description *</label>
+                          <textarea rows={3} required value={assignmentForm.description} onChange={e => setAssignmentForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the task, requirements, and deliverables..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors resize-none" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Due Date & Time *</label>
+                            <input type="datetime-local" required value={assignmentForm.dueDate} onChange={e => setAssignmentForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Submission Link</label>
+                            <input type="url" value={assignmentForm.submissionLink} onChange={e => setAssignmentForm(f => ({ ...f, submissionLink: e.target.value }))} placeholder="https://forms.google.com/..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                          </div>
+                        </div>
+                        {/* Recipients */}
+                        {/* Recipients */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Target Recipients</label>
+                            {assignmentForm.recipientType === 'all_members' ? (
+                              <span className="text-[11px] text-orange-400 font-mono">
+                                {members.length > 0 ? `${members.length} accepted members` : `${applicants.filter(a => a.email).length} total applicants`}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-orange-400 font-mono">
+                                {assignmentForm.specificRecipients.length} selected
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setAssignmentForm(f => ({ ...f, recipientType: 'all_members' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${assignmentForm.recipientType === 'all_members' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-black/40 text-gray-400 border-white/10 hover:border-white/20'}`}
+                            >
+                              All Cohort Members ({members.length > 0 ? members.length : applicants.filter(a => a.email).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAssignmentForm(f => ({ ...f, recipientType: 'specific' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${assignmentForm.recipientType === 'specific' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-black/40 text-gray-400 border-white/10 hover:border-white/20'}`}
+                            >
+                              Specific Members / Individuals
+                            </button>
+                          </div>
+                          {assignmentForm.recipientType === 'specific' && (
+                            <div className="mt-3 p-4 bg-black/50 rounded-2xl border border-white/10 flex flex-col gap-3">
+                              {/* Dropdown to pick from existing applicants */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                    Select from Cohort
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const acceptedEmails = members.map(m => m.email);
+                                        setAssignmentForm(f => ({
+                                          ...f,
+                                          specificRecipients: Array.from(new Set([...f.specificRecipients, ...acceptedEmails]))
+                                        }));
+                                      }}
+                                      className="text-[10px] text-orange-400 hover:text-orange-300 transition-colors font-medium"
+                                    >
+                                      + Add All Accepted
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAssignmentForm(f => ({ ...f, specificRecipients: [] }))}
+                                      className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
+                                    >
+                                      Clear
+                                    </button>
+                                  </div>
+                                </div>
+                                <select
+                                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                                  onChange={(e) => {
+                                    const email = e.target.value;
+                                    if (!email) return;
+                                    if (!assignmentForm.specificRecipients.includes(email)) {
+                                      setAssignmentForm(f => ({
+                                        ...f,
+                                        specificRecipients: [...f.specificRecipients, email]
+                                      }));
+                                    }
+                                    e.target.value = '';
+                                  }}
+                                >
+                                  <option value="">-- Choose an applicant/member to add --</option>
+                                  {applicants.filter(a => a.email).map(a => (
+                                    <option key={a.id} value={a.email}>
+                                      {a.name} — {a.email} [{a.status}]
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Manual email entry */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                                  Or Type Custom Email
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="email"
+                                    value={assignmentSpecificInput}
+                                    onChange={e => setAssignmentSpecificInput(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const trimmed = assignmentSpecificInput.trim();
+                                        if (trimmed && trimmed.includes('@')) {
+                                          if (!assignmentForm.specificRecipients.includes(trimmed)) {
+                                            setAssignmentForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                          }
+                                          setAssignmentSpecificInput('');
+                                        }
+                                      }
+                                    }}
+                                    placeholder="e.g. student@thapar.edu"
+                                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const trimmed = assignmentSpecificInput.trim();
+                                      if (trimmed && trimmed.includes('@')) {
+                                        if (!assignmentForm.specificRecipients.includes(trimmed)) {
+                                          setAssignmentForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                        }
+                                        setAssignmentSpecificInput('');
+                                      }
+                                    }}
+                                    className="bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Selected Chips */}
+                              <div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">
+                                  Selected Recipients ({assignmentForm.specificRecipients.length}):
+                                </div>
+                                {assignmentForm.specificRecipients.length === 0 ? (
+                                  <p className="text-xs text-gray-500 italic py-1">No recipients selected yet. Pick from above or type an email.</p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                    {assignmentForm.specificRecipients.map(email => {
+                                      const app = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+                                      return (
+                                        <span key={email} className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-xs px-2.5 py-1 rounded-full">
+                                          <span className="font-medium">{app ? app.name : email.split('@')[0]}</span>
+                                          <span className="text-[10px] text-orange-400/70">&lt;{email}&gt;</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setAssignmentForm(f => ({ ...f, specificRecipients: f.specificRecipients.filter(e => e !== email) }))}
+                                            className="ml-1 text-orange-400 hover:text-white transition-colors text-sm"
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {/* CC Admins */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">CC Admins on Emails</label>
+                          <div className="relative">
+                            <button type="button" onClick={() => setShowAssignmentCcDropdown(!showAssignmentCcDropdown)} className="w-full flex items-center justify-between bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-gray-400 hover:border-orange-500/40 transition-colors">
+                              <span>{assignmentForm.ccAdmins.length === 0 ? 'No admins in CC' : `${assignmentForm.ccAdmins.length} admin(s) in CC`}</span>
+                              <ChevronDown size={14} className={`transition-transform ${showAssignmentCcDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            <AnimatePresence>
+                              {showAssignmentCcDropdown && (
+                                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-50 shadow-2xl">
+                                  {admins.map(admin => (
+                                    <button key={admin.id} type="button" onClick={() => setAssignmentForm(f => ({ ...f, ccAdmins: f.ccAdmins.includes(admin.email) ? f.ccAdmins.filter(e => e !== admin.email) : [...f.ccAdmins, admin.email] }))} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">
+                                      <div className={`w-5 h-5 rounded border flex items-center justify-center ${assignmentForm.ccAdmins.includes(admin.email) ? 'bg-orange-500 border-orange-500' : 'border-white/20'}`}>
+                                        {assignmentForm.ccAdmins.includes(admin.email) && <Check size={12} className="text-white" />}
+                                      </div>
+                                      <p className="text-sm text-white">{admin.email} <span className="text-gray-500 text-xs">({admin.role})</span></p>
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                        {/* Tags */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Tags</label>
+                          <div className="flex gap-2">
+                            <input value={assignmentTagInput} onChange={e => setAssignmentTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (assignmentTagInput.trim()) { setAssignmentForm(f => ({ ...f, tags: [...f.tags, assignmentTagInput.trim()] })); setAssignmentTagInput(''); } } }} placeholder="e.g. Task, Project, Challenge..." className="flex-1 bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-orange-500/50" />
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {assignmentForm.tags.map(tag => (
+                              <span key={tag} className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs px-2 py-1 rounded-full">
+                                {tag}<button type="button" onClick={() => setAssignmentForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }))} className="ml-1 hover:text-white">×</button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {/* File Attachments */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Attach Materials / Resources (Optional)</span>
+                            {isUploadingAssignmentFile && <span className="text-orange-400 text-xs flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Uploading...</span>}
+                          </label>
+                          <label className="border border-dashed border-white/20 hover:border-orange-500/50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40">
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              disabled={isUploadingAssignmentFile}
+                              onChange={(e) => handleUploadAssignmentFiles(e.target.files, false)}
+                            />
+                            <FileUp size={22} className="text-gray-400 mb-1" />
+                            <p className="text-xs text-gray-300 font-medium">Click to upload files (PDFs, Docs, Starter code, etc.)</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">Files are uploaded to Vercel CDN & linked in email</p>
+                          </label>
+
+                          {assignmentForm.attachmentUrls && assignmentForm.attachmentUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {assignmentForm.attachmentUrls.map((att, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 text-xs text-gray-200 px-3 py-1.5 rounded-lg">
+                                  <Paperclip size={12} className="text-orange-400" />
+                                  <span className="truncate max-w-[200px]">{att.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAssignmentForm(f => ({ ...f, attachmentUrls: f.attachmentUrls.filter((_, i) => i !== idx) }))}
+                                    className="text-gray-400 hover:text-red-400 ml-1"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Priority */}
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <div onClick={() => setAssignmentForm(f => ({ ...f, isPriority: !f.isPriority }))} className={`w-10 h-6 rounded-full border transition-colors relative ${assignmentForm.isPriority ? 'bg-red-500 border-red-500' : 'bg-white/10 border-white/20'}`}>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${assignmentForm.isPriority ? 'left-4.5' : 'left-0.5'}`} />
+                          </div>
+                          <span className="text-sm text-gray-300">Mark as Priority</span>
+                        </label>
+                        <button type="submit" disabled={isSendingAssignmentEmail || isUploadingAssignmentFile} className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+                          {isSendingAssignmentEmail ? <><RefreshCw size={16} className="animate-spin" /> Creating & Sending...</> : <><Send size={16} /> Create & Send Announcement</>}
+                        </button>
+                      </form>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Edit Assignment Modal */}
+              <AnimatePresence>
+                {showEditAssignment && editingAssignment && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#111] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                      <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          <Pencil size={20} className="text-orange-400" /> Edit Assignment
+                        </h4>
+                        <button onClick={() => setShowEditAssignment(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSaveAssignmentEdit} className="p-6 flex flex-col gap-5">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Title *</label>
+                          <input type="text" required value={editAssignmentForm.title} onChange={e => setEditAssignmentForm(f => ({ ...f, title: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description *</label>
+                          <textarea rows={3} required value={editAssignmentForm.description} onChange={e => setEditAssignmentForm(f => ({ ...f, description: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors resize-none" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Due Date & Time *</label>
+                            <input type="datetime-local" required value={editAssignmentForm.dueDate} onChange={e => setEditAssignmentForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Submission Link</label>
+                            <input type="url" value={editAssignmentForm.submissionLink} onChange={e => setEditAssignmentForm(f => ({ ...f, submissionLink: e.target.value }))} placeholder="https://forms.google.com/..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-orange-500/50 transition-colors" />
+                          </div>
+                        </div>
+
+                        {/* Recipients */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Target Recipients</label>
+                            <span className="text-[11px] text-orange-400 font-mono">
+                              {editAssignmentForm.recipientType === 'all_members' ? 'All Cohort' : `${editAssignmentForm.specificRecipients.length} selected`}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditAssignmentForm(f => ({ ...f, recipientType: 'all_members' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editAssignmentForm.recipientType === 'all_members' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              All Cohort Members ({members.length > 0 ? members.length : applicants.filter(a => a.email).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditAssignmentForm(f => ({ ...f, recipientType: 'specific' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editAssignmentForm.recipientType === 'specific' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              Specific Members
+                            </button>
+                          </div>
+                          {editAssignmentForm.recipientType === 'specific' && (
+                            <div className="mt-3 p-4 bg-black/50 rounded-2xl border border-white/10 flex flex-col gap-3">
+                              <select
+                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                                onChange={(e) => {
+                                  const email = e.target.value;
+                                  if (!email) return;
+                                  if (!editAssignmentForm.specificRecipients.includes(email)) {
+                                    setEditAssignmentForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, email] }));
+                                  }
+                                  e.target.value = '';
+                                }}
+                              >
+                                <option value="">-- Add applicant to recipients --</option>
+                                {applicants.filter(a => a.email).map(a => (
+                                  <option key={a.id} value={a.email}>{a.name} — {a.email} [{a.status}]</option>
+                                ))}
+                              </select>
+                              <div className="flex gap-2">
+                                <input
+                                  type="email"
+                                  value={editAssignmentSpecificInput}
+                                  onChange={e => setEditAssignmentSpecificInput(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const trimmed = editAssignmentSpecificInput.trim();
+                                      if (trimmed && trimmed.includes('@')) {
+                                        if (!editAssignmentForm.specificRecipients.includes(trimmed)) {
+                                          setEditAssignmentForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                        }
+                                        setEditAssignmentSpecificInput('');
+                                      }
+                                    }
+                                  }}
+                                  placeholder="or type custom email..."
+                                  className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const trimmed = editAssignmentSpecificInput.trim();
+                                    if (trimmed && trimmed.includes('@')) {
+                                      if (!editAssignmentForm.specificRecipients.includes(trimmed)) {
+                                        setEditAssignmentForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                      }
+                                      setEditAssignmentSpecificInput('');
+                                    }
+                                  }}
+                                  className="bg-orange-500/20 text-orange-400 border border-orange-500/40 px-3.5 py-2 rounded-xl text-xs font-bold"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                                {editAssignmentForm.specificRecipients.map(email => (
+                                  <span key={email} className="inline-flex items-center gap-1.5 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-xs px-2.5 py-1 rounded-full">
+                                    {email}
+                                    <button type="button" onClick={() => setEditAssignmentForm(f => ({ ...f, specificRecipients: f.specificRecipients.filter(e => e !== email) }))} className="ml-1 hover:text-white">×</button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* File Attachments */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Attached Materials</span>
+                            {isUploadingAssignmentFile && <span className="text-orange-400 text-xs flex items-center gap-1"><RefreshCw size={11} className="animate-spin" /> Uploading...</span>}
+                          </label>
+                          <label className="border border-dashed border-white/20 hover:border-orange-500/50 rounded-xl p-3.5 flex flex-col items-center justify-center cursor-pointer transition-colors bg-black/40">
+                            <input
+                              type="file"
+                              multiple
+                              className="hidden"
+                              disabled={isUploadingAssignmentFile}
+                              onChange={(e) => handleUploadAssignmentFiles(e.target.files, true)}
+                            />
+                            <FileUp size={22} className="text-gray-400 mb-1" />
+                            <p className="text-xs text-gray-300 font-medium">Click to attach files</p>
+                          </label>
+                          {editAssignmentForm.attachmentUrls && editAssignmentForm.attachmentUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {editAssignmentForm.attachmentUrls.map((att, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 text-xs text-gray-200 px-3 py-1.5 rounded-lg">
+                                  <Paperclip size={12} className="text-orange-400" />
+                                  <span className="truncate max-w-[200px]">{att.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditAssignmentForm(f => ({ ...f, attachmentUrls: f.attachmentUrls.filter((_, i) => i !== idx) }))}
+                                    className="text-gray-400 hover:text-red-400 ml-1"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Priority & Notification Toggles */}
+                        <div className="flex flex-col gap-3">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <div onClick={() => setEditAssignmentForm(f => ({ ...f, isPriority: !f.isPriority }))} className={`w-10 h-6 rounded-full border transition-colors relative ${editAssignmentForm.isPriority ? 'bg-red-500 border-red-500' : 'bg-white/10 border-white/20'}`}>
+                              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${editAssignmentForm.isPriority ? 'left-4.5' : 'left-0.5'}`} />
+                            </div>
+                            <span className="text-sm text-gray-300">Priority Assignment</span>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <div onClick={() => setEditAssignmentNotify(!editAssignmentNotify)} className={`w-10 h-6 rounded-full border transition-colors relative ${editAssignmentNotify ? 'bg-blue-500 border-blue-500' : 'bg-white/10 border-white/20'}`}>
+                              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${editAssignmentNotify ? 'left-4.5' : 'left-0.5'}`} />
+                            </div>
+                            <span className="text-sm text-gray-300">Send Directive Update email to participants</span>
+                          </label>
+                        </div>
+
+                        <button type="submit" disabled={isSavingAssignmentEdit || isUploadingAssignmentFile} className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-black font-bold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+                          {isSavingAssignmentEdit ? <><RefreshCw size={16} className="animate-spin" /> Saving Changes...</> : <><Check size={16} /> Save Changes</>}
+                        </button>
+                      </form>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* SCHEDULE TAB */}
+          {activeTab === 'schedule' && isSuperAdmin && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-white font-bold text-xl flex items-center gap-2">
+                    <CalendarDays className="text-blue-400" size={24} /> Class Schedule
+                  </h3>
+                  <p className="text-gray-400 text-sm mt-1">Schedule sessions, send invites to members, track attendance.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                    <button onClick={() => setScheduleView('upcoming')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${scheduleView === 'upcoming' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}>Upcoming</button>
+                    <button onClick={() => setScheduleView('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${scheduleView === 'all' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}>All</button>
+                  </div>
+                  <button onClick={() => setShowCreateSession(true)} className="flex items-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+                    <Plus size={16} /> Schedule Class
+                  </button>
+                </div>
+              </div>
+
+              {/* Next Class Banner */}
+              {nextSession && (
+                <div className="bg-gradient-to-r from-blue-950/60 via-[#111] to-[#111] border border-blue-500/30 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                      {nextSession.type === 'online' ? <Video size={22} /> : <MapPin size={22} />}
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1">Next Session</p>
+                      <p className="text-white font-bold text-base">{nextSession.title}</p>
+                      <p className="text-gray-400 text-sm">{new Date(`${nextSession.date}T${nextSession.time}`).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-blue-400 tabular-nums">{getCountdown(nextSession)}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">remaining</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sessions Grid */}
+              {(scheduleView === 'upcoming' ? upcomingSessions : classSessions).length === 0 ? (
+                <div className="bg-[#111] border border-white/10 rounded-2xl p-12 text-center">
+                  <CalendarDays size={40} className="text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400">{scheduleView === 'upcoming' ? 'No upcoming sessions.' : 'No sessions scheduled.'}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {(scheduleView === 'upcoming' ? upcomingSessions : classSessions).map(session => (
+                    <div
+                      key={session.id}
+                      className={`bg-[#111] border rounded-2xl p-5 flex flex-col gap-3 cursor-pointer transition-all hover:border-white/20 ${session.isCancelled ? 'border-red-500/20 opacity-60' : session.type === 'online' ? 'border-blue-500/20' : 'border-green-500/20'}`}
+                      onClick={() => setSelectedSession(session)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${session.type === 'online' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
+                          {session.type === 'online' ? <Video size={18} /> : <MapPin size={18} />}
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          {session.isCancelled && <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-full">CANCELLED</span>}
+                          {session.isRecurring && <span className="text-[10px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded-full">RECURRING</span>}
+                          {session.tags.slice(0, 2).map(t => <span key={t} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${session.type === 'online' ? 'bg-blue-500/10 text-blue-300 border-blue-500/20' : 'bg-green-500/10 text-green-300 border-green-500/20'}`}>{t}</span>)}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-white font-bold leading-tight">{session.title}</p>
+                        {session.description && <p className="text-gray-500 text-xs mt-1 line-clamp-2">{session.description}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Calendar size={12} />
+                          {new Date(`${session.date}T${session.time}`).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Clock size={12} /> {session.duration} min
+                        </div>
+                        {session.type === 'online' && session.meetLink && (
+                          <div className="flex items-center gap-2 text-xs text-blue-400">
+                            <Link size={12} />
+                            <span className="truncate">{session.meetLink}</span>
+                            <button type="button" onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(session.meetLink || ''); showToast('Copied', 'Meet link copied to clipboard.'); }} className="text-gray-500 hover:text-white ml-auto shrink-0 p-1 hover:bg-white/10 rounded">
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                        )}
+                        {session.type === 'offline' && session.location && (
+                          <div className="flex items-center gap-2 text-xs text-green-400">
+                            <MapPin size={12} />{session.location}
+                          </div>
+                        )}
+                      </div>
+                      {session.isCancelled && session.cancelReason && (
+                        <div className="text-[11px] text-red-400/90 bg-red-500/10 border border-red-500/20 rounded-lg p-2 mt-2">
+                          <span className="font-bold uppercase tracking-wider text-[9px] text-red-400 block mb-0.5">Cancellation Reason</span>
+                          {session.cancelReason}
+                        </div>
+                      )}
+                      {/* Action buttons */}
+                      <div className="flex gap-2 mt-1 pt-3 border-t border-white/5">
+                        {!session.isCancelled ? (
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleOpenEditSession(session); }}
+                              className="flex-1 py-1.5 text-xs text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 rounded-lg transition-colors font-bold flex items-center justify-center gap-1"
+                            >
+                              <Pencil size={11} /> Edit
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleOpenCancelModal(session); }}
+                              className="flex-1 py-1.5 text-xs text-red-400 hover:bg-red-500/10 border border-red-500/20 rounded-lg transition-colors font-bold"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex-1 text-[11px] text-gray-500 flex items-center">
+                            Session Cancelled
+                          </div>
+                        )}
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteSession(session); }}
+                          className="py-1.5 px-3 text-xs text-gray-400 hover:text-red-400 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+                          title="Delete Session"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Create Session Modal */}
+              <AnimatePresence>
+                {showCreateSession && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#111] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                      <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          <CalendarDays size={20} className="text-blue-400" /> Schedule New Class
+                        </h4>
+                        <button onClick={() => setShowCreateSession(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <form onSubmit={handleCreateSession} className="p-6 flex flex-col gap-5">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Session Title *</label>
+                          <input type="text" required value={sessionForm.title} onChange={e => setSessionForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g., React Advanced Patterns Workshop" className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
+                          <textarea rows={2} value={sessionForm.description} onChange={e => setSessionForm(f => ({ ...f, description: e.target.value }))} placeholder="What will be covered in this session?" className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors resize-none" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Date *</label>
+                            <input type="date" required value={sessionForm.date} onChange={e => setSessionForm(f => ({ ...f, date: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Time *</label>
+                            <input type="time" required value={sessionForm.time} onChange={e => setSessionForm(f => ({ ...f, time: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Duration (min)</label>
+                            <input type="number" min={15} max={480} value={sessionForm.duration} onChange={e => setSessionForm(f => ({ ...f, duration: parseInt(e.target.value) || 60 }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                        </div>
+                        {/* Type */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Session Type</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setSessionForm(f => ({ ...f, type: 'online' }))} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border transition-colors ${sessionForm.type === 'online' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}>
+                              <Video size={14} /> Online
+                            </button>
+                            <button type="button" onClick={() => setSessionForm(f => ({ ...f, type: 'offline' }))} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border transition-colors ${sessionForm.type === 'offline' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}>
+                              <MapPin size={14} /> Offline
+                            </button>
+                          </div>
+                          <div className="mt-3">
+                            {sessionForm.type === 'online' ? (
+                              <input type="url" value={sessionForm.meetLink} onChange={e => setSessionForm(f => ({ ...f, meetLink: e.target.value }))} placeholder="https://meet.google.com/..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 text-sm" />
+                            ) : (
+                              <input type="text" value={sessionForm.location} onChange={e => setSessionForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g., TAN Auditorium, Room 201" className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-green-500/50 text-sm" />
+                            )}
+                          </div>
+                        </div>
+                        {/* Recipients */}
+                        {/* Recipients */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Invite Recipients</label>
+                            {sessionForm.recipientType === 'all_members' ? (
+                              <span className="text-[11px] text-blue-400 font-mono">
+                                {members.length > 0 ? `${members.length} accepted members` : `${applicants.filter(a => a.email).length} total applicants`}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-blue-400 font-mono">
+                                {sessionForm.specificRecipients.length} selected
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSessionForm(f => ({ ...f, recipientType: 'all_members' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${sessionForm.recipientType === 'all_members' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              All Cohort Members ({members.length > 0 ? members.length : applicants.filter(a => a.email).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSessionForm(f => ({ ...f, recipientType: 'specific' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${sessionForm.recipientType === 'specific' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              Specific Members / Individuals
+                            </button>
+                          </div>
+
+                          {sessionForm.recipientType === 'specific' && (
+                            <div className="mt-3 p-4 bg-black/50 rounded-2xl border border-white/10 flex flex-col gap-3">
+                              {/* Quick selector from applicant database */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                    Select from Cohort
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const acceptedEmails = members.map(m => m.email);
+                                        setSessionForm(f => ({
+                                          ...f,
+                                          specificRecipients: Array.from(new Set([...f.specificRecipients, ...acceptedEmails]))
+                                        }));
+                                      }}
+                                      className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                                    >
+                                      + Add All Accepted
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSessionForm(f => ({ ...f, specificRecipients: [] }))}
+                                      className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
+                                    >
+                                      Clear
+                                    </button>
+                                  </div>
+                                </div>
+                                <select
+                                  className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                  onChange={(e) => {
+                                    const email = e.target.value;
+                                    if (!email) return;
+                                    if (!sessionForm.specificRecipients.includes(email)) {
+                                      setSessionForm(f => ({
+                                        ...f,
+                                        specificRecipients: [...f.specificRecipients, email]
+                                      }));
+                                    }
+                                    e.target.value = '';
+                                  }}
+                                >
+                                  <option value="">-- Choose an applicant/member to invite --</option>
+                                  {applicants.filter(a => a.email).map(a => (
+                                    <option key={a.id} value={a.email}>
+                                      {a.name} — {a.email} [{a.status}]
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Manual email entry */}
+                              <div>
+                                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                                  Or Type Custom Email
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="email"
+                                    value={sessionSpecificInput}
+                                    onChange={e => setSessionSpecificInput(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const trimmed = sessionSpecificInput.trim();
+                                        if (trimmed && trimmed.includes('@')) {
+                                          if (!sessionForm.specificRecipients.includes(trimmed)) {
+                                            setSessionForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                          }
+                                          setSessionSpecificInput('');
+                                        }
+                                      }
+                                    }}
+                                    placeholder="e.g., student@thapar.edu or guest@gmail.com"
+                                    className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const trimmed = sessionSpecificInput.trim();
+                                      if (trimmed && trimmed.includes('@')) {
+                                        if (!sessionForm.specificRecipients.includes(trimmed)) {
+                                          setSessionForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                        }
+                                        setSessionSpecificInput('');
+                                      }
+                                    }}
+                                    className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/40 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Selected Chips */}
+                              <div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">
+                                  Selected Invitees ({sessionForm.specificRecipients.length}):
+                                </div>
+                                {sessionForm.specificRecipients.length === 0 ? (
+                                  <p className="text-xs text-gray-500 italic py-1">No invitees selected yet. Pick from above or type an email.</p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar p-1">
+                                    {sessionForm.specificRecipients.map(email => {
+                                      const app = applicants.find(a => a.email?.toLowerCase() === email.toLowerCase());
+                                      return (
+                                        <span key={email} className="inline-flex items-center gap-1.5 bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs px-2.5 py-1 rounded-full">
+                                          <span className="font-medium">{app ? app.name : email.split('@')[0]}</span>
+                                          <span className="text-[10px] text-blue-400/70">&lt;{email}&gt;</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setSessionForm(f => ({ ...f, specificRecipients: f.specificRecipients.filter(e => e !== email) }))}
+                                            className="ml-1 text-blue-400 hover:text-white transition-colors text-sm"
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {/* CC Admins */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">CC Admins on Invite</label>
+                          <div className="relative">
+                            <button type="button" onClick={() => setShowSessionCcDropdown(!showSessionCcDropdown)} className="w-full flex items-center justify-between bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-gray-400 hover:border-blue-500/40 transition-colors">
+                              <span>{sessionForm.ccAdmins.length === 0 ? 'No admins in CC' : `${sessionForm.ccAdmins.length} admin(s) in CC`}</span>
+                              <ChevronDown size={14} className={`transition-transform ${showSessionCcDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            <AnimatePresence>
+                              {showSessionCcDropdown && (
+                                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-50 shadow-2xl">
+                                  {admins.map(admin => (
+                                    <button key={admin.id} type="button" onClick={() => setSessionForm(f => ({ ...f, ccAdmins: f.ccAdmins.includes(admin.email) ? f.ccAdmins.filter(e => e !== admin.email) : [...f.ccAdmins, admin.email] }))} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">
+                                      <div className={`w-5 h-5 rounded border flex items-center justify-center ${sessionForm.ccAdmins.includes(admin.email) ? 'bg-blue-500 border-blue-500' : 'border-white/20'}`}>
+                                        {sessionForm.ccAdmins.includes(admin.email) && <Check size={12} className="text-white" />}
+                                      </div>
+                                      <p className="text-sm text-white">{admin.email} <span className="text-gray-500 text-xs">({admin.role})</span></p>
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                        {/* Tags */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Tags (Enter to add)</label>
+                          <input value={sessionTagInput} onChange={e => setSessionTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (sessionTagInput.trim()) { setSessionForm(f => ({ ...f, tags: [...f.tags, sessionTagInput.trim()] })); setSessionTagInput(''); } } }} placeholder="Workshop, Lecture, Hackathon, Guest Speaker..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500/50" />
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {sessionForm.tags.map(tag => (
+                              <span key={tag} className="flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full">
+                                {tag}<button type="button" onClick={() => setSessionForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }))} className="ml-1 hover:text-white">×</button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Recurring */}
+                        <div className="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                          <div>
+                            <p className="text-sm text-white font-medium">Recurring Session</p>
+                            <p className="text-xs text-gray-500">Repeat this session on a schedule</p>
+                          </div>
+                          <button type="button" onClick={() => setSessionForm(f => ({ ...f, isRecurring: !f.isRecurring }))} className={`w-11 h-6 rounded-full border transition-colors relative ${sessionForm.isRecurring ? 'bg-blue-500 border-blue-500' : 'bg-white/10 border-white/20'}`}>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${sessionForm.isRecurring ? 'left-5' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+                        {sessionForm.isRecurring && (
+                          <div className="flex gap-2">
+                            {(['weekly', 'biweekly', 'monthly'] as const).map(pat => (
+                              <button key={pat} type="button" onClick={() => setSessionForm(f => ({ ...f, recurringPattern: pat }))} className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors capitalize ${sessionForm.recurringPattern === pat ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}>{pat}</button>
+                            ))}
+                          </div>
+                        )}
+                        <button type="submit" disabled={isSendingClassEmail} className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+                          {isSendingClassEmail ? <><RefreshCw size={16} className="animate-spin" /> Scheduling & Sending...</> : <><Send size={16} /> Schedule & Send Invites</>}
+                        </button>
+                      </form>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Edit Session Modal */}
+              <AnimatePresence>
+                {showEditSession && editingSession && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#111] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                      <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          <Pencil size={20} className="text-blue-400" /> Edit Class Session
+                        </h4>
+                        <button onClick={() => setShowEditSession(false)} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSaveSessionEdit} className="p-6 flex flex-col gap-5">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Session Title *</label>
+                          <input type="text" required value={editSessionForm.title} onChange={e => setEditSessionForm(f => ({ ...f, title: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
+                          <textarea rows={2} value={editSessionForm.description} onChange={e => setEditSessionForm(f => ({ ...f, description: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors resize-none" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Date *</label>
+                            <input type="date" required value={editSessionForm.date} onChange={e => setEditSessionForm(f => ({ ...f, date: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Time *</label>
+                            <input type="time" required value={editSessionForm.time} onChange={e => setEditSessionForm(f => ({ ...f, time: e.target.value }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Duration (min)</label>
+                            <input type="number" min={15} max={480} value={editSessionForm.duration} onChange={e => setEditSessionForm(f => ({ ...f, duration: parseInt(e.target.value) || 60 }))} className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50" />
+                          </div>
+                        </div>
+
+                        {/* Type */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Session Type</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setEditSessionForm(f => ({ ...f, type: 'online' }))} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editSessionForm.type === 'online' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}>
+                              <Video size={14} /> Online
+                            </button>
+                            <button type="button" onClick={() => setEditSessionForm(f => ({ ...f, type: 'offline' }))} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editSessionForm.type === 'offline' ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}>
+                              <MapPin size={14} /> Offline
+                            </button>
+                          </div>
+                          <div className="mt-3">
+                            {editSessionForm.type === 'online' ? (
+                              <input type="url" value={editSessionForm.meetLink} onChange={e => setEditSessionForm(f => ({ ...f, meetLink: e.target.value }))} placeholder="https://meet.google.com/..." className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-blue-500/50 text-sm" />
+                            ) : (
+                              <input type="text" value={editSessionForm.location} onChange={e => setEditSessionForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g., TAN Auditorium, Room 201" className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-green-500/50 text-sm" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Recipients */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Invite Recipients</label>
+                            <span className="text-[11px] text-blue-400 font-mono">
+                              {editSessionForm.recipientType === 'all_members' ? 'All Cohort' : `${editSessionForm.specificRecipients.length} selected`}
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditSessionForm(f => ({ ...f, recipientType: 'all_members' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editSessionForm.recipientType === 'all_members' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              All Cohort Members ({members.length > 0 ? members.length : applicants.filter(a => a.email).length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditSessionForm(f => ({ ...f, recipientType: 'specific' }))}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${editSessionForm.recipientType === 'specific' ? 'bg-blue-500/20 text-blue-400 border-blue-500/40' : 'bg-black/40 text-gray-400 border-white/10'}`}
+                            >
+                              Specific Members
+                            </button>
+                          </div>
+                          {editSessionForm.recipientType === 'specific' && (
+                            <div className="mt-3 p-4 bg-black/50 rounded-2xl border border-white/10 flex flex-col gap-3">
+                              <select
+                                className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                onChange={(e) => {
+                                  const email = e.target.value;
+                                  if (!email) return;
+                                  if (!editSessionForm.specificRecipients.includes(email)) {
+                                    setEditSessionForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, email] }));
+                                  }
+                                  e.target.value = '';
+                                }}
+                              >
+                                <option value="">-- Add applicant to invitees --</option>
+                                {applicants.filter(a => a.email).map(a => (
+                                  <option key={a.id} value={a.email}>{a.name} — {a.email} [{a.status}]</option>
+                                ))}
+                              </select>
+                              <div className="flex gap-2">
+                                <input
+                                  type="email"
+                                  value={editSessionSpecificInput}
+                                  onChange={e => setEditSessionSpecificInput(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const trimmed = editSessionSpecificInput.trim();
+                                      if (trimmed && trimmed.includes('@')) {
+                                        if (!editSessionForm.specificRecipients.includes(trimmed)) {
+                                          setEditSessionForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                        }
+                                        setEditSessionSpecificInput('');
+                                      }
+                                    }
+                                  }}
+                                  placeholder="or type custom email..."
+                                  className="flex-1 bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const trimmed = editSessionSpecificInput.trim();
+                                    if (trimmed && trimmed.includes('@')) {
+                                      if (!editSessionForm.specificRecipients.includes(trimmed)) {
+                                        setEditSessionForm(f => ({ ...f, specificRecipients: [...f.specificRecipients, trimmed] }));
+                                      }
+                                      setEditSessionSpecificInput('');
+                                    }
+                                  }}
+                                  className="bg-blue-500/20 text-blue-400 border border-blue-500/40 px-3.5 py-2 rounded-xl text-xs font-bold"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar">
+                                {editSessionForm.specificRecipients.map(email => (
+                                  <span key={email} className="inline-flex items-center gap-1.5 bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs px-2.5 py-1 rounded-full">
+                                    {email}
+                                    <button type="button" onClick={() => setEditSessionForm(f => ({ ...f, specificRecipients: f.specificRecipients.filter(e => e !== email) }))} className="ml-1 hover:text-white">×</button>
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Notification Toggle */}
+                        <label className="flex items-center gap-3 cursor-pointer p-3 bg-black/40 rounded-xl border border-white/5">
+                          <div onClick={() => setEditSessionNotify(!editSessionNotify)} className={`w-10 h-6 rounded-full border transition-colors relative ${editSessionNotify ? 'bg-blue-500 border-blue-500' : 'bg-white/10 border-white/20'}`}>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${editSessionNotify ? 'left-4.5' : 'left-0.5'}`} />
+                          </div>
+                          <div>
+                            <p className="text-sm text-white font-medium">Send Reschedule / Update Email</p>
+                            <p className="text-xs text-gray-500">Notifies all participants about new time/link via email</p>
+                          </div>
+                        </label>
+
+                        <button type="submit" disabled={isSavingSessionEdit} className="w-full bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
+                          {isSavingSessionEdit ? <><RefreshCw size={16} className="animate-spin" /> Saving Changes...</> : <><Check size={16} /> Update Session</>}
+                        </button>
+                      </form>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Cancellation Confirmation Modal with Email Notification */}
+              <AnimatePresence>
+                {showCancelModal && sessionToCancel && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-[#111] border border-red-500/30 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
+                      <div className="p-6 border-b border-white/10 flex items-center justify-between bg-red-500/5">
+                        <h4 className="text-white font-bold text-lg flex items-center gap-2">
+                          <AlertTriangle size={20} className="text-red-400" /> Cancel Class Session
+                        </h4>
+                        <button onClick={() => { setShowCancelModal(false); setSessionToCancel(null); }} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors">
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="p-6 flex flex-col gap-4">
+                        <p className="text-sm text-gray-300">
+                          Are you sure you want to cancel <b className="text-white">"{sessionToCancel.title}"</b>?
+                        </p>
+                        <div className="bg-black/60 border border-white/10 rounded-xl p-3 text-xs text-gray-400 flex flex-col gap-1">
+                          <p><b className="text-gray-300">Scheduled:</b> {sessionToCancel.date} at {sessionToCancel.time}</p>
+                          <p><b className="text-gray-300">Notice:</b> An official VEKTOR cancellation email will be automatically dispatched to all invitees and CC admins.</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                            Reason for Cancellation (Optional)
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={cancelReasonInput}
+                            onChange={e => setCancelReasonInput(e.target.value)}
+                            placeholder="e.g., Guest speaker unavailable, rescheduled to Friday..."
+                            className="w-full bg-black/60 border border-white/10 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-red-500/50 resize-none"
+                          />
+                        </div>
+                        <div className="flex gap-3 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => { setShowCancelModal(false); setSessionToCancel(null); }}
+                            className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-sm font-bold transition-colors border border-white/10"
+                          >
+                            Keep Session
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isCancellingSession}
+                            onClick={handleConfirmCancelSession}
+                            className="flex-1 py-3 bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                          >
+                            {isCancellingSession ? <><RefreshCw size={14} className="animate-spin" /> Cancelling...</> : <><Send size={14} /> Cancel & Notify via Email</>}
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+
           {/* AUDIT LOGS TAB */}
           {activeTab === 'audit' && isSuperAdmin && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
