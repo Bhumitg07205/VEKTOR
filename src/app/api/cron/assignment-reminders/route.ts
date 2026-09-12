@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 // Vercel Cron Job: runs daily at 9am UTC
 // Checks all active assignments past their due date and sends reminders to non-submitters
