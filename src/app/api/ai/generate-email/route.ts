@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+export const dynamic = 'force-dynamic';
 
 const SYSTEM_INSTRUCTION = `
 You are the Communications Intelligence AI for VEKTOR, an elite student engineering and technology collective at Thapar Institute of Engineering & Technology, Patiala.
@@ -29,8 +29,9 @@ Output must be STRICT JSON with the following schema:
 
 const CANDIDATE_MODELS = [
   'gemini-3.6-flash',
+  'gemini-3.7-flash',
   'gemini-flash-latest',
-  'gemini-2.5-flash',
+  'gemini-flash-lite-latest',
 ];
 
 async function callGemini(apiKey: string, promptText: string) {
@@ -61,7 +62,14 @@ async function callGemini(apiKey: string, promptText: string) {
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        lastError = errJson?.error?.message || `Model ${model} returned HTTP ${res.status}`;
+        const message = errJson?.error?.message || `Model ${model} returned HTTP ${res.status}`;
+        
+        // If authentication or permission fails, do not mask it by trying further models
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          throw new Error(message);
+        }
+
+        lastError = message;
         continue;
       }
 
@@ -71,15 +79,31 @@ async function callGemini(apiKey: string, promptText: string) {
         return JSON.parse(rawText);
       }
     } catch (err: any) {
+      // If it's an auth error thrown explicitly, rethrow immediately
+      if (err.message && (err.message.includes('API key') || err.message.includes('API_KEY'))) {
+        throw err;
+      }
       lastError = err.message || err;
     }
   }
 
-  throw new Error(lastError || 'All Gemini models failed to generate content.');
+  throw new Error(lastError || 'All Gemini candidate models failed to generate content.');
 }
 
 export async function POST(req: Request) {
   try {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GEMINI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json({
+        error: 'GEMINI_API_KEY is not configured on the production server. Please ensure GEMINI_API_KEY is configured in your deployment environment variables.'
+      }, { status: 500 });
+    }
+
     const { prompt, tone, targetAudience, currentSubject, currentBody, mode } = await req.json();
 
     if (!prompt && mode !== 'polish') {
@@ -105,7 +129,7 @@ Desired Tone: ${tone || 'VEKTOR Elite & Authoritative'}
 `;
     }
 
-    const result = await callGemini(GEMINI_API_KEY, userPrompt);
+    const result = await callGemini(apiKey, userPrompt);
 
     return NextResponse.json({
       success: true,
