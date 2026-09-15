@@ -53,6 +53,11 @@ export async function GET(req: Request) {
       if (nonSubmitters.length === 0) continue;
 
       // Fire reminder email
+      const payloadAttachments = assignment.attachmentUrls?.map(att => ({
+        filename: att.name,
+        url: att.url,
+      }));
+
       await fetch(`${baseUrl}/api/send-assignment-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,11 +65,13 @@ export async function GET(req: Request) {
           type: 'reminder',
           recipients: nonSubmitters.map(m => ({ email: m.email, name: m.name })),
           ccEmails: assignment.ccAdmins || [],
+          attachments: payloadAttachments && payloadAttachments.length > 0 ? payloadAttachments : undefined,
           assignment: {
             title: assignment.title,
             description: assignment.description,
             dueDate: assignment.dueDate,
             submissionLink: assignment.submissionLink,
+            attachmentUrls: assignment.attachmentUrls,
           },
         }),
       });

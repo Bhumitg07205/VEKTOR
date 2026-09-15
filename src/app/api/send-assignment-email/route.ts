@@ -36,7 +36,7 @@ const generateTemplate = (title: string, subtitle: string, accentColor: string, 
 
 export async function POST(req: Request) {
   try {
-    const { type, recipients, ccEmails, assignment } = await req.json();
+    const { type, recipients, ccEmails, assignment, attachments } = await req.json();
     if (!recipients || recipients.length === 0) {
       return NextResponse.json({ error: 'No recipients provided' }, { status: 400 });
     }
@@ -48,7 +48,40 @@ export async function POST(req: Request) {
         pass: process.env.GMAIL_APP_PASSWORD || 'nusr wbbv pftt efsw',
       },
     });
-    const dueDateFormatted = assignment.dueDate
+
+    // Parse attachments identical to Comms Studio (/api/send-bulk-email) with URL/path fallback
+    const rawAttachments = (Array.isArray(attachments) && attachments.length > 0)
+      ? attachments
+      : (Array.isArray(assignment?.attachments) && assignment.attachments.length > 0)
+        ? assignment.attachments
+        : (Array.isArray(assignment?.attachmentUrls) && assignment.attachmentUrls.length > 0)
+          ? assignment.attachmentUrls
+          : [];
+
+    const mailAttachments = rawAttachments.length > 0
+      ? rawAttachments.map((att: any) => {
+          const filename = att.filename || att.name || 'attachment.pdf';
+          const contentType = att.contentType || att.type || 'application/octet-stream';
+          if (att.content || att.base64) {
+            const rawContent = att.content || att.base64;
+            return {
+              filename,
+              content: Buffer.from(rawContent.replace(/^data:.*?;base64,/, ''), 'base64'),
+              contentType,
+            };
+          }
+          if (att.url || att.path) {
+            return {
+              filename,
+              path: att.url || att.path,
+              contentType,
+            };
+          }
+          return null;
+        }).filter(Boolean)
+      : undefined;
+
+    const dueDateFormatted = assignment?.dueDate
       ? new Date(assignment.dueDate).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short', timeZone: 'UTC' })
       : 'No deadline specified';
 
@@ -81,16 +114,23 @@ export async function POST(req: Request) {
             <a href="${assignment.submissionLink}" style="font-size:15px;color:${colors.blue};text-decoration:none;">${assignment.submissionLink}</a>
           </td></tr>` : ''}
         </table>
-        ${assignment.attachmentUrls && assignment.attachmentUrls.length > 0 ? `
+        ${((assignment.attachmentUrls && assignment.attachmentUrls.length > 0) || (mailAttachments && mailAttachments.length > 0)) ? `
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:20px;margin:24px 0;">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#a3a3a3;font-weight:700;margin-bottom:12px;">Attached Materials & Briefs (${assignment.attachmentUrls.length})</div>
-          ${assignment.attachmentUrls.map((att: { name: string; url: string }) => `
-            <div style="margin-bottom:8px;">
-              <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:none;font-size:14px;font-weight:600;">
-                📎 ${att.name} &rarr;
-              </a>
-            </div>
-          `).join('')}
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#a3a3a3;font-weight:700;margin-bottom:12px;">Attached Materials & Briefs (${(assignment.attachmentUrls || mailAttachments).length})</div>
+          ${assignment.attachmentUrls && assignment.attachmentUrls.length > 0
+            ? assignment.attachmentUrls.map((att: { name: string; url: string }) => `
+              <div style="margin-bottom:8px;">
+                <a href="${att.url || '#'}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8;text-decoration:none;font-size:14px;font-weight:600;">
+                  📎 ${att.name} &rarr;
+                </a>
+              </div>
+            `).join('')
+            : (mailAttachments || []).map((att: any) => `
+              <div style="margin-bottom:8px;color:#e5e5e5;font-size:14px;font-weight:500;">
+                📎 ${att.filename}
+              </div>
+            `).join('')
+          }
         </div>` : ''}
         ${assignment.tags && assignment.tags.length > 0 ? `
         <div style="margin-top:16px;">
@@ -109,12 +149,17 @@ export async function POST(req: Request) {
           <div style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px;">${assignment.title}</div>
           <div style="font-size:13px;color:#888;">Deadline: <span style="color:${colors.red};font-weight:600;">${dueDateFormatted}</span></div>
         </div>
-        ${assignment.attachmentUrls && assignment.attachmentUrls.length > 0 ? `
+        ${((assignment.attachmentUrls && assignment.attachmentUrls.length > 0) || (mailAttachments && mailAttachments.length > 0)) ? `
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin:16px 0;">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#a3a3a3;font-weight:700;margin-bottom:8px;">Materials</div>
-          ${assignment.attachmentUrls.map((att: { name: string; url: string }) => `
-            <div style="margin-bottom:4px;"><a href="${att.url}" target="_blank" style="color:#38bdf8;text-decoration:none;font-size:13px;">📎 ${att.name}</a></div>
-          `).join('')}
+          ${assignment.attachmentUrls && assignment.attachmentUrls.length > 0
+            ? assignment.attachmentUrls.map((att: { name: string; url: string }) => `
+              <div style="margin-bottom:4px;"><a href="${att.url || '#'}" target="_blank" style="color:#38bdf8;text-decoration:none;font-size:13px;">📎 ${att.name}</a></div>
+            `).join('')
+            : (mailAttachments || []).map((att: any) => `
+              <div style="margin-bottom:4px;color:#e5e5e5;font-size:13px;">📎 ${att.filename}</div>
+            `).join('')
+          }
         </div>` : ''}
         ${assignment.submissionLink ? `<div style="margin-top:24px;text-align:center;"><a href="${assignment.submissionLink}" style="display:inline-block;background:${colors.amber};color:#000;font-weight:700;font-size:14px;padding:14px 32px;border-radius:8px;text-decoration:none;letter-spacing:1px;text-transform:uppercase;">Submit Now</a></div>` : ''}
         <p style="margin-top:32px;color:#a3a3a3;font-size:14px;">Automated reminder from VEKTOR Core. Act now.</p>`;
@@ -146,6 +191,7 @@ export async function POST(req: Request) {
         cc: validCc.length > 0 ? validCc.join(',') : undefined,
         subject,
         html: htmlContent.replace(/Operative\./g, `${r.name || 'Operative'}.`),
+        attachments: mailAttachments && mailAttachments.length > 0 ? (mailAttachments as any) : undefined,
       })
     );
 

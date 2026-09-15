@@ -252,7 +252,7 @@ export default function AdminDashboard() {
     ccAdmins: [] as string[],
     tags: [] as string[],
     isPriority: false,
-    attachmentUrls: [] as { name: string; url: string }[],
+    attachmentUrls: [] as { name: string; url: string; base64?: string; type?: string; size?: number }[],
   });
   const [assignmentTagInput, setAssignmentTagInput] = useState('');
   const [assignmentSpecificInput, setAssignmentSpecificInput] = useState('');
@@ -275,7 +275,7 @@ export default function AdminDashboard() {
     ccAdmins: [] as string[],
     tags: [] as string[],
     isPriority: false,
-    attachmentUrls: [] as { name: string; url: string }[],
+    attachmentUrls: [] as { name: string; url: string; base64?: string; type?: string; size?: number }[],
   });
   const [editAssignmentTagInput, setEditAssignmentTagInput] = useState('');
   const [editAssignmentSpecificInput, setEditAssignmentSpecificInput] = useState('');
@@ -910,15 +910,26 @@ export default function AdminDashboard() {
 
     setIsSendingAssignmentEmail(true);
     try {
+      const dbAttachmentUrls = assignmentForm.attachmentUrls.map(a => ({ name: a.name, url: a.url || '' }));
+
       const newId = await addAssignment({
         ...assignmentForm,
+        attachmentUrls: dbAttachmentUrls,
         createdAt: new Date().toISOString(),
         createdBy: currentUserEmail,
         remindersSent: 0,
         isActive: true,
       });
 
-      const newAsgn: Assignment = { id: newId, ...assignmentForm, createdAt: new Date().toISOString(), createdBy: currentUserEmail, remindersSent: 0, isActive: true };
+      const newAsgn: Assignment = {
+        id: newId,
+        ...assignmentForm,
+        attachmentUrls: dbAttachmentUrls,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUserEmail,
+        remindersSent: 0,
+        isActive: true
+      };
       setAssignments(prev => [newAsgn, ...prev]);
       addAuditLog({ adminEmail: currentUserEmail, actionType: 'ASSIGNMENT_CREATE', details: `Created assignment "${assignmentForm.title}"` });
 
@@ -937,6 +948,13 @@ export default function AdminDashboard() {
 
       if (recipientPool.length > 0) {
         try {
+          const payloadAttachments = assignmentForm.attachmentUrls.map(att => ({
+            filename: att.name,
+            contentType: att.type || 'application/octet-stream',
+            content: att.base64 || '',
+            url: att.url || '',
+          }));
+
           const res = await fetch('/api/send-assignment-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -944,12 +962,14 @@ export default function AdminDashboard() {
               type: 'announce',
               recipients: recipientPool,
               ccEmails: assignmentForm.ccAdmins,
+              attachments: payloadAttachments.length > 0 ? payloadAttachments : undefined,
               assignment: {
                 title: assignmentForm.title,
                 description: assignmentForm.description,
                 dueDate: assignmentForm.dueDate,
                 submissionLink: assignmentForm.submissionLink,
-                tags: assignmentForm.tags
+                tags: assignmentForm.tags,
+                attachmentUrls: dbAttachmentUrls,
               },
             }),
           });
@@ -987,15 +1007,39 @@ export default function AdminDashboard() {
     if (!files || files.length === 0) return;
     setIsUploadingAssignmentFile(true);
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
-          method: 'POST',
-          body: file,
+      const fileArray = Array.from(files);
+      for (const file of fileArray) {
+        // Read file as base64 data URL (same way as Comms Studio)
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
-        const newAtt = { name: file.name, url: data.url };
+
+        // Also upload to Vercel Blob for persistent storage
+        let blobUrl = '';
+        try {
+          const res = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+            method: 'POST',
+            body: file,
+          });
+          const data = await res.json();
+          if (res.ok && data.url) {
+            blobUrl = data.url;
+          }
+        } catch (uploadErr) {
+          console.warn('Blob upload fallback:', uploadErr);
+        }
+
+        const newAtt = {
+          name: file.name,
+          url: blobUrl,
+          base64,
+          type: file.type || 'application/octet-stream',
+          size: file.size,
+        };
+
         if (isEdit) {
           setEditAssignmentForm(f => ({
             ...f,
@@ -1008,10 +1052,10 @@ export default function AdminDashboard() {
           }));
         }
       }
-      showToast("Files Attached", `Uploaded ${files.length} file(s) successfully.`);
+      showToast("Files Attached", `Attached ${fileArray.length} file(s) successfully.`);
     } catch (err: any) {
       console.error(err);
-      showToast("Upload Error", err.message || "Failed to upload file.");
+      showToast("Upload Error", err.message || "Failed to process file.");
     } finally {
       setIsUploadingAssignmentFile(false);
     }
@@ -1047,6 +1091,7 @@ export default function AdminDashboard() {
     }
     setIsSavingAssignmentEdit(true);
     try {
+      const dbAttachmentUrls = editAssignmentForm.attachmentUrls.map(a => ({ name: a.name, url: a.url || '' }));
       const updatedData: Partial<Assignment> = {
         title: editAssignmentForm.title,
         description: editAssignmentForm.description,
@@ -1057,7 +1102,7 @@ export default function AdminDashboard() {
         ccAdmins: editAssignmentForm.ccAdmins,
         tags: editAssignmentForm.tags,
         isPriority: editAssignmentForm.isPriority,
-        attachmentUrls: editAssignmentForm.attachmentUrls,
+        attachmentUrls: dbAttachmentUrls,
       };
 
       await updateAssignment(editingAssignment.id, updatedData);
@@ -1082,6 +1127,13 @@ export default function AdminDashboard() {
 
         if (recipientPool.length > 0) {
           try {
+            const payloadAttachments = editAssignmentForm.attachmentUrls.map(att => ({
+              filename: att.name,
+              contentType: att.type || 'application/octet-stream',
+              content: att.base64 || '',
+              url: att.url || '',
+            }));
+
             await fetch('/api/send-assignment-email', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1089,13 +1141,14 @@ export default function AdminDashboard() {
                 type: 'update',
                 recipients: recipientPool,
                 ccEmails: editAssignmentForm.ccAdmins,
+                attachments: payloadAttachments.length > 0 ? payloadAttachments : undefined,
                 assignment: {
                   title: editAssignmentForm.title,
                   description: editAssignmentForm.description,
                   dueDate: editAssignmentForm.dueDate,
                   submissionLink: editAssignmentForm.submissionLink,
                   tags: editAssignmentForm.tags,
-                  attachmentUrls: editAssignmentForm.attachmentUrls,
+                  attachmentUrls: dbAttachmentUrls,
                 },
               }),
             });
@@ -1124,6 +1177,11 @@ export default function AdminDashboard() {
     if (!confirm(`Send reminder to ${nonSubmitters.length} non-submitter(s)?`)) return;
     setIsSendingReminders(true);
     try {
+      const payloadAttachments = asgn.attachmentUrls?.map(att => ({
+        filename: att.name,
+        url: att.url,
+      }));
+
       await fetch('/api/send-assignment-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1131,7 +1189,14 @@ export default function AdminDashboard() {
           type: 'reminder',
           recipients: nonSubmitters.map(m => ({ email: m.email, name: m.name })),
           ccEmails: asgn.ccAdmins || [],
-          assignment: { title: asgn.title, description: asgn.description, dueDate: asgn.dueDate, submissionLink: asgn.submissionLink },
+          attachments: payloadAttachments && payloadAttachments.length > 0 ? payloadAttachments : undefined,
+          assignment: {
+            title: asgn.title,
+            description: asgn.description,
+            dueDate: asgn.dueDate,
+            submissionLink: asgn.submissionLink,
+            attachmentUrls: asgn.attachmentUrls,
+          },
         }),
       });
       await updateAssignment(asgn.id, { remindersSent: (asgn.remindersSent || 0) + 1, lastReminderAt: new Date().toISOString() });
